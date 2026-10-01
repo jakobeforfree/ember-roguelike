@@ -16,6 +16,7 @@ func _enter_tree() -> void:
 	_bind("move_down", [_key(KEY_S), _key(KEY_DOWN), _axis(JOY_AXIS_LEFT_Y, 1.0), _btn(JOY_BUTTON_DPAD_DOWN)])
 	_bind("dodge", [_key(KEY_SPACE), _key(KEY_SHIFT), _btn(JOY_BUTTON_A), _btn(JOY_BUTTON_RIGHT_SHOULDER)])
 	_bind("pause", [_key(KEY_ESCAPE), _key(KEY_P), _btn(JOY_BUTTON_START)])
+	_bind("backpack", [_key(KEY_B), _key(KEY_I), _key(KEY_TAB), _btn(JOY_BUTTON_Y)])
 	_bind("confirm", [_key(KEY_ENTER), _key(KEY_KP_ENTER), _btn(JOY_BUTTON_A)])
 	_bind("nav_left", [_key(KEY_LEFT), _key(KEY_A), _btn(JOY_BUTTON_DPAD_LEFT), _axis(JOY_AXIS_LEFT_X, -1.0)])
 	_bind("nav_right", [_key(KEY_RIGHT), _key(KEY_D), _btn(JOY_BUTTON_DPAD_RIGHT), _axis(JOY_AXIS_LEFT_X, 1.0)])

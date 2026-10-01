@@ -70,6 +70,38 @@ static func bolt(parent: Node, from: Vector3, to: Vector3, color: Color) -> void
 	tw.tween_callback(root.queue_free)
 
 
+## Melee sweep: a fading fan in front of `origin` that sweeps across the arc.
+static func slash(parent: Node, origin: Vector3, dir: Vector3, reach: float, half: float, color: Color) -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var steps := 18
+	for i in steps:
+		var a0 := -half + 2.0 * half * i / steps
+		var a1 := -half + 2.0 * half * (i + 1) / steps
+		var inner := 0.35 * reach
+		var p0 := Vector3(cos(a0), 0, sin(a0))
+		var p1 := Vector3(cos(a1), 0, sin(a1))
+		st.add_vertex(p0 * inner)
+		st.add_vertex(p0 * reach)
+		st.add_vertex(p1 * reach)
+		st.add_vertex(p0 * inner)
+		st.add_vertex(p1 * reach)
+		st.add_vertex(p1 * inner)
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	var mat := Mats.fx(Color(color, 0.55), true)
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.position = origin + Vector3(0, 0.9, 0)
+	var base_yaw := atan2(-dir.z, dir.x)   # local +X along dir
+	mi.rotation.y = base_yaw + 0.35
+	parent.add_child(mi)
+	var tw := mi.create_tween().set_parallel()
+	tw.tween_property(mi, "rotation:y", base_yaw - 0.15, 0.14).set_ease(Tween.EASE_OUT)
+	tw.tween_property(mat, "albedo_color:a", 0.0, 0.22)
+	tw.chain().tween_callback(mi.queue_free)
+
+
 static func text(parent: Node, pos: Vector3, s: String, color: Color, size: int = 48) -> void:
 	var l := Label3D.new()
 	l.text = s

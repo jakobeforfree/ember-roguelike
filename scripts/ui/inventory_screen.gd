@@ -1,9 +1,9 @@
-class_name Hub
+class_name InventoryScreen
 extends Control
-## Camp screen between runs: loadout (left), inventory + item details (right),
-## start button (bottom center). The 3D camp scene shows through the middle.
+## The Backpack: loadout (left), inventory + item details (right). Opened from the
+## camp by clicking the backpack; the wizard stays visible between the panels.
 
-signal start_run
+signal closed
 
 const INV_COLUMNS := 4
 
@@ -12,7 +12,6 @@ var _stats_grid: GridContainer
 var _grid: GridContainer
 var _detail: VBoxContainer
 var _gold: Label
-var _best: Label
 var _inv_title: Label
 var _selected: GearItem
 
@@ -22,52 +21,53 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	theme = UiKit.theme()
 
-	# Soft vignette so panels read over the 3D scene
+	mouse_filter = Control.MOUSE_FILTER_STOP
 	var shade := ColorRect.new()
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	shade.color = Color(0, 0, 0, 0.15)
-	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	shade.color = Color(0.02, 0.03, 0.06, 0.55)
 	add_child(shade)
 
 	_build_top_bar()
 	_build_left()
 	_build_right()
-	_build_bottom()
 	Profile.changed.connect(refresh)
 	refresh()
+	UiKit.pop_in(self, 0.0)
 
 
 func _build_top_bar() -> void:
-	var logo := HBoxContainer.new()
-	logo.position = Vector2(28, 20)
-	logo.add_theme_constant_override("separation", 10)
-	add_child(logo)
-	logo.add_child(UiKit.icon("local_fire_department", 38, UiKit.ACCENT))
+	var head := HBoxContainer.new()
+	head.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	head.offset_left = 28
+	head.offset_right = -28
+	head.offset_top = 24
+	head.offset_bottom = 72
+	head.add_theme_constant_override("separation", 12)
+	add_child(head)
+	head.add_child(UiKit.icon("backpack", 34, UiKit.ACCENT))
 	var t := VBoxContainer.new()
 	t.add_theme_constant_override("separation", -6)
-	logo.add_child(t)
-	t.add_child(UiKit.label("EMBER", 30, Color.WHITE, 800, 6))
-	t.add_child(UiKit.label("THE CAMP", 12, UiKit.MUTED, 700, 4))
-
-	var right := HBoxContainer.new()
-	right.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	right.offset_left = -520
-	right.offset_right = -28
-	right.offset_top = 26
-	right.alignment = BoxContainer.ALIGNMENT_END
-	right.add_theme_constant_override("separation", 10)
-	add_child(right)
-	var best := UiKit.chip("", Color("a78bfa"), "emoji_events", 16)
-	_best = UiKit.chip_label(best)
-	_best.visible = true
-	right.add_child(best)
+	head.add_child(t)
+	t.add_child(UiKit.label("BACKPACK", 28, Color.WHITE, 800, 5))
+	t.add_child(UiKit.label("THE WANDERER'S GEAR", 11, UiKit.MUTED, 700, 3))
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(spacer)
 	var gold := UiKit.chip("", UiKit.GOLD, "toll", 16)
 	_gold = UiKit.chip_label(gold)
 	_gold.visible = true
-	right.add_child(gold)
-	var gear := UiKit.button("", "secondary", 18, Vector2(40, 40), "settings")
-	gear.pressed.connect(open_settings)
-	right.add_child(gear)
+	gold.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(gold)
+	var dev := UiKit.button("Dev: +gear", "ghost", 12, Vector2(0, 40))
+	dev.pressed.connect(_dev_grant)
+	head.add_child(dev)
+	if not Controls.touch_mode:
+		var hint := UiKit.hint_row([["ESC", "Close"]])
+		hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		head.add_child(hint)
+	var x := UiKit.button("", "secondary", 18, Vector2(44, 44), "close")
+	x.pressed.connect(close)
+	head.add_child(x)
 
 
 func _build_left() -> void:
@@ -127,32 +127,6 @@ func _build_right() -> void:
 	dp.add_child(_detail)
 
 
-func _build_bottom() -> void:
-	var box := VBoxContainer.new()
-	box.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	box.offset_left = -170
-	box.offset_right = 170
-	box.offset_top = -138
-	box.offset_bottom = -28
-	box.add_theme_constant_override("separation", 6)
-	add_child(box)
-	var start := UiKit.button("START RUN", "primary", 26, Vector2(340, 76), "play_arrow")
-	start.pressed.connect(func(): start_run.emit())
-	box.add_child(start)
-	var hint := UiKit.hint_row([["ENTER", "Start"], ["WASD", "Move"], [Controls.key_label("dodge"), "Dodge"]])
-	hint.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_child(hint)
-	# Dev helper sits in the corner, out of the way of the main flow.
-	var dev := UiKit.button("Dev: +gear", "ghost", 12, Vector2(0, 26))
-	dev.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	dev.offset_left = 34
-	dev.offset_right = 140
-	dev.offset_top = -24
-	dev.offset_bottom = -1
-	dev.pressed.connect(_dev_grant)
-	add_child(dev)
-
-
 func _section_title(text: String, icon_name: String) -> HBoxContainer:
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 8)
@@ -169,7 +143,6 @@ func refresh() -> void:
 	if not is_inside_tree():
 		return
 	_gold.text = str(Profile.gold)
-	_best.text = "Best: —" if Profile.best_stage == 0 else "Best: Stage %d" % Profile.best_stage
 
 	for c in _slots_box.get_children():
 		c.queue_free()
@@ -217,7 +190,7 @@ func _slot_row(slot: String, it: GearItem) -> Button:
 	tile.custom_minimum_size = Vector2(38, 38)
 	tile.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	tile.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	tile.add_child(UiKit.icon(GearDB.SLOT_INFO[slot]["icon"], 22, col))
+	tile.add_child(UiKit.icon(_icon_for(it) if it else GearDB.SLOT_INFO[slot]["icon"], 22, col))
 	h.add_child(tile)
 	var v := VBoxContainer.new()
 	v.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -256,7 +229,7 @@ func _item_tile(it: GearItem) -> Button:
 	b.add_theme_stylebox_override("normal", UiKit.box(Color(col, 0.13), 14, Color.WHITE if sel else Color(col, 0.55), 2 if sel else 1, 0))
 	b.add_theme_stylebox_override("hover", UiKit.box(Color(col, 0.2), 14, col, 1, 0))
 	b.add_theme_stylebox_override("pressed", UiKit.box(Color(col, 0.3), 14, col, 2, 0))
-	var ic := UiKit.icon(GearDB.SLOT_INFO[it.slot]["icon"], 34, col)
+	var ic := UiKit.icon(_icon_for(it), 34, col)
 	ic.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	b.add_child(ic)
 	if it.specials.size() > 0:
@@ -279,6 +252,12 @@ func _item_tile(it: GearItem) -> Button:
 	return b
 
 
+func _icon_for(it: GearItem) -> String:
+	if it.slot == "weapon" and it.weapon_id != "":
+		return WeaponDB.get_def(it.weapon_id)["icon"]
+	return GearDB.SLOT_INFO[it.slot]["icon"]
+
+
 func _select(it: GearItem) -> void:
 	_selected = it
 	refresh()
@@ -296,7 +275,7 @@ func _show_detail(it: GearItem) -> void:
 	_detail.add_child(head)
 	var tile := UiKit.panel(Color(col, 0.15), Color(col, 0.6), 1, 12, 0)
 	tile.custom_minimum_size = Vector2(46, 46)
-	tile.add_child(UiKit.icon(GearDB.SLOT_INFO[it.slot]["icon"], 26, col))
+	tile.add_child(UiKit.icon(_icon_for(it), 26, col))
 	head.add_child(tile)
 	var hv := VBoxContainer.new()
 	hv.add_theme_constant_override("separation", -2)
@@ -307,6 +286,11 @@ func _show_detail(it: GearItem) -> void:
 	lines.add_theme_constant_override("separation", 0)
 	lines.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_detail.add_child(lines)
+	if it.slot == "weapon":
+		var wd := WeaponDB.get_def(it.weapon_id)
+		var wl := UiKit.label("%s — %s" % [wd["name"], wd["desc"]], 13, Color(wd["color"]).lightened(0.2), 600)
+		wl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		lines.add_child(wl)
 	for line in it.describe_lines():
 		var special := line.begins_with("★")
 		var l := UiKit.label(line.trim_prefix("★ "), 14, UiKit.GOLD if special else UiKit.TEXT, 600 if special else 500)
@@ -333,17 +317,15 @@ func _show_detail(it: GearItem) -> void:
 		row.add_child(sv)
 
 
-func open_settings() -> void:
-	if find_children("*", "SettingsPanel", false, false).is_empty():
-		add_child(SettingsPanel.new())
+func close() -> void:
+	closed.emit()
+	queue_free()
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_visible_in_tree() or not find_children("*", "SettingsPanel", false, false).is_empty():
-		return
-	if event.is_action_pressed("confirm"):
+	if event.is_action_pressed("pause") or event.is_action_pressed("backpack"):
 		get_viewport().set_input_as_handled()
-		start_run.emit()
+		close()
 
 
 func _dev_grant() -> void:

@@ -130,6 +130,9 @@ static func button(text: String, kind: String = "primary", size: int = 20, min_s
 		row.add_child(icon(icon_name, int(size * 1.25), fg))
 	if text != "":
 		row.add_child(label(text, size, fg, 700 if kind in ["primary", "teal"] else 600))
+	# Content lives in a child row, so reserve its width explicitly.
+	var pad := 28.0 if text != "" else 0.0
+	b.ready.connect(func(): b.custom_minimum_size.x = maxf(min_size.x, row.get_combined_minimum_size().x + pad))
 	press_feedback(b)
 	return b
 

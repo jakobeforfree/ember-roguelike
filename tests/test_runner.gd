@@ -124,6 +124,97 @@ func _frames(n: int) -> void:
 		await get_tree().physics_frame
 
 
+func test_every_weapon_kills() -> void:
+	for wid in WeaponDB.ids():
+		var room := Room.new()
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 1
+		room.build(rng, 0.0, false, 0)
+		add_child(room)
+		var stats := StatBuilder.build("wanderer", [], {})
+		for k in WeaponDB.get_def(wid)["base"]:
+			stats.set_base(k, WeaponDB.get_def(wid)["base"][k])
+		var p := Player.new()
+		p.setup(stats, wid)
+		p.room = room
+		p.position = Vector3(10, 0, 10)
+		room.player = p
+		room.entities.add_child(p)
+		var reach: float = minf(stats.get_stat("attack_range") - 1.0, 6.0)
+		var a := room.spawn_enemy("grunt", Vector3(10, 0, 10 - reach))
+		var b := room.spawn_enemy("grunt", Vector3(10.8, 0, 10 - reach))
+		for e in [a, b]:
+			e.speed = 0.0
+			e.damage = 0.0
+		await _frames(60 * 8)
+		var dead := 0
+		for e in [a, b]:
+			if not is_instance_valid(e) or e.dead:
+				dead += 1
+		check(dead == 2, "%s killed both grunts in 8s (%d/2)" % [wid, dead])
+		check(p.model.get_node_or_null("Body/Hand/Weapon") != null, "%s model in hand" % wid)
+		room.queue_free()
+		await _frames(2)
+
+
+func test_camp_menu_flow() -> void:
+	var main = load("res://scripts/main.gd").new()
+	add_child(main)
+	await _frames(5)
+	var menu: CampMenu = main.menu
+	check(main.camp != null and main.run == null, "game opens at camp")
+	var inv := menu.open_inventory()
+	await _frames(5)
+	check(menu._modal_open(), "backpack opens")
+	inv.close()
+	await _frames(5)
+	check(not menu._modal_open(), "backpack closes")
+	var circle: Array = main.camp.screen_circle("fire")
+	check(circle[1] > 10.0, "campfire is on screen with a clickable radius")
+	menu.activate("fire")
+	await get_tree().create_timer(0.8).timeout
+	check(main.run != null and main.camp == null, "clicking the fire starts a run")
+	get_tree().paused = false
+	main.queue_free()
+	await _frames(2)
+
+
+## Walks from every open spot in every layout to the gate the way enemies do
+## (re-pathing every 0.25s). Guards against corner flip-flops and dead ends.
+func test_every_layout_is_navigable() -> void:
+	for layout in Room.LAYOUTS:
+		for size in [Vector2(31, 24), Vector2(37, 28)]:
+			var room := Room.new()
+			room.bounds = Rect2(Vector2.ZERO, size)
+			for o in Room.LAYOUTS[layout]:
+				var c := Vector2(size.x * o[0], size.y * o[1])
+				room.obstacles.append(Rect2(c - Vector2(o[2], o[3]) * 0.5, Vector2(o[2], o[3])))
+			room._build_nav()
+			var goal := Vector2(size.x * 0.5, 0.6)
+			var stuck := 0
+			for sx in range(2, int(size.x) - 2, 2):
+				for sz in range(2, int(size.y) - 2, 2):
+					var p := Vector2(sx + 0.3, sz + 0.3)
+					if room.is_blocked(p, 0.45):
+						continue
+					var wp := p
+					var hold := 0
+					var ok := false
+					for step in 500:
+						hold -= 1
+						if hold <= 0 or p.distance_to(wp) < 0.3:
+							wp = room.next_waypoint(p, goal, 0.45)
+							hold = 15
+						p += (wp - p).normalized() * 0.12
+						if p.distance_to(goal) < 1.0:
+							ok = true
+							break
+					if not ok:
+						stuck += 1
+			check(stuck == 0, "layout %s %s: every spot reaches the gate (%d stuck)" % [layout, size, stuck])
+			room.free()
+
+
 func test_pc_controls() -> void:
 	for a in ["move_left", "move_right", "move_up", "move_down", "dodge", "pause", "confirm", "pick_1", "pick_3"]:
 		check(InputMap.has_action(a), "action %s registered" % a)
@@ -296,6 +387,17 @@ func _sim_run(seed_value: int, god: bool, max_seconds: float) -> Dictionary:
 	var result := {"died": died, "progress": max_room, "stage": run.run.stage, "upgrades": run.run.upgrades.duplicate(),
 		"dodges": bot.dodges, "perfect": bot.perfect, "damage_taken": roundi(bot.damage_taken),
 		"loot": run.run.loot.size(), "kills": run.run.kills, "gold": run.run.gold, "seconds": snappedf(frames / 60.0, 0.1)}
+	if not died and run.run.stage < 2:
+		var info := []
+		for e in run.room.alive:
+			if is_instance_valid(e):
+				info.append("%s@%s st=%s los=%s hp=%d" % [e.enemy_id, Vector2i(Flat.xz(e.global_position)), e.state, e.has_los(), e.hp])
+		for n in run.room.entities.get_children():
+			if n is LootPickup:
+				var here := Flat.xz(run.player.global_position)
+				var to := Flat.xz(n.global_position)
+				print("    loot at %s blocked=%s waypoint=%s bounds=%s obstacles=%s" % [to, run.room.is_blocked(to, 0.45), run.room.next_waypoint(here, to, 0.45), run.room.bounds, run.room.obstacles])
+		print("    STALL: layout=%s wave=%d player=%s weapon=%s door=%s alive=%s" % [run.room.layout_name, run.room.wave_index, Vector2i(Flat.xz(run.player.global_position)), run.player.weapon_id, run.room.door_open, info])
 	get_tree().paused = false
 	Engine.time_scale = 1.0
 	main.queue_free()

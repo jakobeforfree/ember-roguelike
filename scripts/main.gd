@@ -1,19 +1,19 @@
 extends Node
-## Top-level flow: Camp (3D scene + Hub UI) <-> Run.
+## Top-level flow: Camp (3D scene that is also the menu) <-> Run.
 
-var hub: Hub
+var menu: CampMenu
 var camp: CampScene
 var run: RunController
-var _hub_layer: CanvasLayer
+var _menu_layer: CanvasLayer
 
 
 func _ready() -> void:
 	get_tree().root.theme = UiKit.theme()
-	_hub_layer = CanvasLayer.new()
-	add_child(_hub_layer)
-	hub = Hub.new()
-	hub.start_run.connect(start_run)
-	_hub_layer.add_child(hub)
+	_menu_layer = CanvasLayer.new()
+	add_child(_menu_layer)
+	menu = CampMenu.new()
+	menu.start_run.connect(start_run)
+	_menu_layer.add_child(menu)
 	_show_camp()
 
 
@@ -21,12 +21,14 @@ func _show_camp() -> void:
 	camp = CampScene.new()
 	add_child(camp)
 	move_child(camp, 0)
-	_hub_layer.visible = true
-	hub.refresh()
+	menu.camp = camp
+	_menu_layer.visible = true
+	menu.refresh()
 
 
 func start_run(seed_value: int = -1) -> RunController:
-	_hub_layer.visible = false
+	_menu_layer.visible = false
+	Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 	if camp:
 		camp.queue_free()
 		camp = null
@@ -41,3 +43,4 @@ func _on_run_finished() -> void:
 	run.queue_free()
 	run = null
 	_show_camp()
+	menu.fade_in()

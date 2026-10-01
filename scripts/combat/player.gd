@@ -32,6 +32,11 @@ var forced_crits := 0
 var attack_cd := 0.0
 var dead := false
 var model: Node3D
+var weapon_id := "staff"
+var _hand: Node3D
+var _hand_base := Vector3.ZERO
+var _tail: Node3D
+var _kick := 0.0
 var _meshes: Array = []
 var _flash := 0.0
 var _t := 0.0
@@ -41,8 +46,10 @@ func setup(p_stats: Stats, weapon_id: String) -> void:
 	stats = p_stats
 	max_hp = stats.get_stat("max_hp")
 	hp = max_hp
+	self.weapon_id = weapon_id
 	var wdef := WeaponDB.get_def(weapon_id)
 	weapon = load(wdef["behavior"]).new()
+	weapon.id = weapon_id
 	weapon.setup(self, wdef)
 	hp_changed.emit(hp, max_hp)
 
@@ -68,9 +75,12 @@ func _ready() -> void:
 	shape.shape = cyl
 	shape.position.y = 0.8
 	add_child(shape)
-	model = Models.player()
+	model = Models.wizard(weapon_id)
 	model.scale = Vector3.ONE * 1.15
 	add_child(model)
+	_hand = model.get_node("Body/Hand")
+	_hand_base = _hand.position
+	_tail = model.get_node("Body/ScarfTail")
 	_meshes = model.find_children("*", "MeshInstance3D", true, false)
 
 
@@ -144,6 +154,7 @@ func _physics_process(delta: float) -> void:
 			to.y = 0.0
 			facing = to.normalized()
 			weapon.attack(target)
+			_kick = 1.0
 			attack_cd = 1.0 / stats.get_stat("attack_speed")
 	_animate(delta, moving)
 
@@ -152,6 +163,19 @@ func _animate(delta: float, moving: bool) -> void:
 	model.rotation.y = lerp_angle(model.rotation.y, Flat.yaw(facing), 1.0 - exp(-18.0 * delta))
 	var bob := absf(sin(_t * 11.0)) * 0.08 if moving else sin(_t * 2.5) * 0.02
 	model.position.y = bob
+	# Robe sway, scarf flutter (stronger when running), weapon kick on attack
+	model.rotation.z = sin(_t * 11.0) * 0.04 if moving else 0.0
+	_tail.rotation.x = 0.35 + sin(_t * (14.0 if moving else 4.0)) * (0.35 if moving else 0.1) + (0.5 if moving else 0.0)
+	_kick = maxf(0.0, _kick - delta * 6.0)
+	if weapon_id == "sword":
+		_hand.rotation.y = lerpf(0.0, -1.6, sin(_kick * PI)) if _kick > 0.0 else 0.0
+		_hand.position = _hand_base
+	else:
+		_hand.position = _hand_base + Vector3(0, 0, -0.22 * sin(_kick * PI * 0.5))
+	var book := _hand.get_node_or_null("Weapon/Book")
+	if book:
+		book.position.y = 0.3 + sin(_t * 3.0) * 0.05
+		book.rotation.y += delta * 0.8
 	if is_dashing():
 		model.scale = Vector3(1.0, 0.9, 1.45)
 	else:

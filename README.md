@@ -26,7 +26,8 @@ touch controls appear automatically if you touch the screen.
 | Attack | Automatic, nearest visible enemy | | |
 | Pick upgrade | 1 / 2 / 3, or arrows + Enter, or click | D-pad + A | Tap |
 | Pause | Esc / P | Start | `II` button |
-| Start run | Enter | A | Tap |
+| Start run | Click the campfire, or Enter | A | Tap the fire |
+| Backpack (gear) | Click the backpack, or B / I / Tab | Y | Tap the pack |
 
 Settings (fullscreen, screen shake, damage numbers) are in the gear menu at camp and in the pause menu,
 and are saved to `user://settings.cfg`.
@@ -59,8 +60,25 @@ and are saved to `user://settings.cfg`.
   (Venomous, Stormcaller, Volatile, Vampiric, Swiftstep, Frostbite, Phantom Dash, Keen Edge).
   Gear drops in rooms (always from the boss) and is **saved as soon as you pick it up**,
   so you keep it when you die.
-- **Camp (hub)**: equip, unequip, salvage gear for gold, see your stats, start a run. A clearly labeled
-  *Dev: grant random gear* button is included for testing.
+- **Camp**: a 3D scene that is the main menu. The campfire starts a run; the backpack opens the gear
+  screen (equip, unequip, salvage for gold, stats). A small *Dev: +gear* button in the backpack is for testing.
+
+## The Wanderer and the weapons
+You play a lonely traveling wizard (wide-brimmed bent hat, ember scarf, beard and staff). The camp is
+the main menu: click the **campfire** to set out, or click the **backpack** to manage gear.
+
+| Weapon | How it attacks | Feel |
+|---|---|---|
+| Staff (starter) | Slow homing embers that burst and splash nearby enemies | Safe, forgiving |
+| Bow | Fast long-range arrows; multishot adds parallel arrows | Precise, ranged |
+| Sword | Wide melee sweep that hits everything in the arc | High risk, high damage |
+| Daggers | Rapid fan of short-range knives | Aggressive, close range |
+| Crossbow | Slow heavy bolts that pierce 2 extra enemies | Punchy, lines of enemies |
+| Wand | Instant lightning that leaps between enemies | Crowd chaining |
+| Tome | Frost nova on the target: area damage plus slow | Crowd control |
+
+Each weapon reads the shared upgrade stats its own way (for example, multishot widens the sword's arc,
+adds a knife to the dagger fan, or adds an extra wand target). Weapons drop as gear and show in the wizard's hand.
 
 ## Code layout
 ```
@@ -73,8 +91,9 @@ scripts/
               upgrade_db, character_db, enemy_db   ← data tables
   combat/     player, enemy (base), enemies/*, projectile, telegraph, combat (damage + procs), fx
   weapons/    weapon_behavior.gd (base), bow_behavior.gd
-  world/      room.gd (layout, walls, A* nav, waves, gate), run_controller.gd, camp_scene.gd, loot_pickup.gd
-  ui/         hud, virtual_joystick, dodge_button, upgrade_panel, message_panel, hub, ui_kit, badge, bar
+  world/      room.gd (layout, walls, A* nav, waves, gate), run_controller.gd, camp_scene.gd (3D camp menu), loot_pickup.gd
+  ui/         camp_menu (main screen), inventory_screen (backpack), hud, ability_slot, virtual_joystick,
+              dodge_button, upgrade_panel, message_panel, settings_panel, ui_kit, badge, bar
 shaders/      telegraph + floor
 tools/        build_web.sh, fetch_web_templates.py (web build / Vercel)
 tests/        test_runner (headless tests + bot run), sim_bot, screenshots
@@ -91,7 +110,7 @@ Fonts are Outfit (SIL OFL) and Material Icons (Apache 2.0); licenses are in `ass
 ### Where future features plug in
 | Feature | Where |
 |---|---|
-| More weapons | Add an entry to `WeaponDB.WEAPONS` and a `WeaponBehavior` subclass (sword = arc sweep, staff = orbs…). Crits, lifesteal and elemental effects already work for every weapon through `Combat`. |
+| More weapons | Add an entry to `WeaponDB.WEAPONS`, a `WeaponBehavior` subclass in `scripts/weapons/`, and a model in `Models.weapon()`. Crits, lifesteal and elemental effects already work for every weapon through `Combat`. |
 | More armor, affixes, specials | Add rows to `GearDB` (`SLOT_INFO`, `AFFIXES`, `SPECIALS`). |
 | Character classes | Add to `CharacterDB` (base stats and starting weapon). `Profile.character_id` selects one. |
 | Talents, pets, set bonuses | Anything that feeds `Stats` modifiers plugs into `StatBuilder.build()`. Pets would be a node like `Player` that uses `Combat.player_hits_enemy`. |

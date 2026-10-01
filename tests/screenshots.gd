@@ -20,12 +20,34 @@ func _ready() -> void:
 	for r in [Rarity.UNCOMMON, Rarity.RARE, Rarity.EPIC, Rarity.LEGENDARY, Rarity.MYTHIC, Rarity.COMMON, Rarity.RARE]:
 		Profile.add_item(LootGenerator.generate(rng, 3, r))
 	Profile.equip(Profile.inventory[4].uid)
+	for wid in ["sword", "tome", "crossbow"]:
+		var w := LootGenerator.generate(rng, 3, Rarity.EPIC, "weapon")
+		w.weapon_id = wid
+		w.name = WeaponDB.get_def(wid)["item_names"][0]
+		Profile.add_item(w)
 	var main = load("res://scripts/main.gd").new()
 	add_child(main)
-	main.hub._selected = Profile.inventory[3]
-	main.hub.refresh()
 	await get_tree().create_timer(0.8).timeout
-	await shot("01_hub")
+	await shot("01_camp")
+	main.menu._set_hover("fire")
+	await get_tree().create_timer(0.4).timeout
+	await shot("01b_camp_hover_fire")
+	main.menu._set_hover("")
+	var inv: InventoryScreen = main.menu.open_inventory()
+	inv._select(Profile.inventory[Profile.inventory.size() - 2])
+	await get_tree().create_timer(0.6).timeout
+	await shot("01c_backpack")
+	inv.close()
+	await get_tree().create_timer(0.3).timeout
+	# Hero close-up
+	main.camp.camera.position = Vector3(-0.1, 1.6, 3.2)
+	main.camp.camera.look_at(Vector3(-0.1, 1.1, 0.6))
+	main.camp.set_process(false)
+	main.menu.visible = false
+	await get_tree().create_timer(0.3).timeout
+	await shot("01d_wizard_closeup")
+	main.menu.visible = true
+	main.camp.set_process(true)
 
 	var run: RunController = main.start_run(3)
 	run.input_enabled = false

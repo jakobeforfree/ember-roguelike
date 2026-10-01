@@ -35,11 +35,11 @@ func ensure_starter_gear() -> void:
 	if get_equipped("weapon") != null:
 		return
 	var rng := RandomNumberGenerator.new()
-	var bow := LootGenerator.generate(rng, 1, Rarity.COMMON, "weapon")
-	bow.weapon_id = "bow"
-	bow.name = "Ashwood Bow"
-	add_item(bow)
-	equip(bow.uid)
+	var staff := LootGenerator.generate(rng, 1, Rarity.COMMON, "weapon")
+	staff.weapon_id = "staff"
+	staff.name = "Ashwood Staff"
+	add_item(staff)
+	equip(staff.uid)
 
 
 func find_item(uid: String) -> GearItem:

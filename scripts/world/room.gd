@@ -210,6 +210,8 @@ func segment_blocked(a: Vector2, b: Vector2, pad: float = 0.0) -> bool:
 	var steps := int(a.distance_to(b) / 0.4) + 1
 	for o in obstacles:
 		var r: Rect2 = o.grow(pad)
+		if r.has_point(a):
+			r = o   # already brushing this obstacle: only its real shape blocks
 		for i in steps + 1:
 			if r.has_point(a.lerp(b, float(i) / steps)):
 				return true
@@ -268,11 +270,14 @@ func next_waypoint(from: Vector2, to: Vector2, pad: float) -> Vector2:
 	var path := astar.get_point_path(_open_cell(_cell(from)), _open_cell(_cell(to)), true)
 	if path.size() < 2:
 		return to
-	var best := path[1]
-	for i in range(2, mini(path.size(), 6)):
-		if segment_blocked(from, path[i], pad):
-			break
-		best = path[i]
+	# String-pull: head for the furthest path point we can walk to in a straight
+	# line. Picking just the next cell flip-flops near corners as the start cell changes.
+	var best := path[0]
+	for i in range(1, mini(path.size(), 12)):
+		if not segment_blocked(from, path[i], pad):
+			best = path[i]
+	if best.distance_to(from) < 0.3 and path.size() > 1:
+		best = path[1]
 	return best
 
 

@@ -11,11 +11,7 @@
     },
     {
       "source": "/(.*)\\.(wasm|pck)",
-      "headers": [
-    {
-      "source": "/index.service.worker.js",
-      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
-    },{ "key": "Cache-Control", "value": "public, max-age=3600" }]
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }]
     }
   ]
 }

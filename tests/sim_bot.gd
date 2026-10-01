@@ -1,13 +1,12 @@
 class_name SimBot
 extends RefCounted
 ## Automated player used by tests: dodges out of telegraphs, kites enemies,
-## collects loot and walks to the door. Gives a rough read on difficulty.
+## collects loot and walks to the gate. Gives a rough read on difficulty.
 
 var run: RunController
 var dodges := 0
 var perfect := 0
 var damage_taken := 0.0
-var rooms_seen := 0
 
 
 func _init(p_run: RunController) -> void:
@@ -24,36 +23,38 @@ func step() -> void:
 	if p == null or p.dead or run.room == null:
 		return
 	var room := run.room
+	var here := Flat.xz(p.global_position)
 	var move := Vector2.ZERO
 	# 1. Danger: if standing in a telegraph, dodge away from it.
 	for tg in room.ground.get_children():
 		if tg is Telegraph and tg.contains(p.global_position, p.radius) and tg.progress() > 0.45:
-			var away: Vector2 = p.global_position - tg.global_position
+			var away := here - Flat.xz(tg.global_position)
 			if tg.shape == Telegraph.Shape.LANE:
-				away = tg.direction.orthogonal() * signf(away.dot(tg.direction.orthogonal()) + 0.001)
+				var side := Vector2(tg.direction.x, tg.direction.z).orthogonal()
+				away = side * signf(away.dot(side) + 0.001)
 			p.move_input = away.normalized()
 			if p.try_dodge():
 				return
 			move += away.normalized() * 2.0
-	# 2. Loot, then the door.
+	# 2. Loot, then the gate.
 	var loot := room.entities.get_children().filter(func(n): return n is LootPickup)
 	if not loot.is_empty():
-		move += (room.next_waypoint(p.global_position, loot[0].global_position, p.radius) - p.global_position).normalized()
+		move += (room.next_waypoint(here, Flat.xz(loot[0].global_position), p.radius) - here).normalized()
 	elif room.door_open:
-		move += (room.next_waypoint(p.global_position, room.door_rect.get_center(), p.radius) - p.global_position).normalized()
+		move += (room.next_waypoint(here, room.door_rect.get_center(), p.radius) - here).normalized()
 	else:
-		# 3. Kite: keep ~260px from the closest enemy, drift toward room center.
+		# 3. Kite: keep ~6.5m from the closest enemy, drift toward room center.
 		var closest = null
 		var cd := INF
 		for e in room.alive:
 			if is_instance_valid(e) and not e.dead:
-				var d := p.global_position.distance_to(e.global_position)
+				var d := Flat.dist(p.global_position, e.global_position)
 				if d < cd:
 					cd = d
 					closest = e
-		if closest and cd < 260.0:
-			move += (p.global_position - closest.global_position).normalized()
-		move += (room.bounds.get_center() - p.global_position) / 800.0
+		if closest and cd < 6.5:
+			move += (here - Flat.xz(closest.global_position)).normalized()
+		move += (room.bounds.get_center() - here) / 20.0
 	p.move_input = move.limit_length(1.0)
 
 

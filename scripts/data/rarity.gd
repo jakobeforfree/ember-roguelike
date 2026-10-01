@@ -5,12 +5,12 @@ extends RefCounted
 enum { COMMON, UNCOMMON, RARE, EPIC, LEGENDARY, MYTHIC }
 
 const TIERS := [
-	{"name": "Common",    "color": Color("b8b8b8"), "mult": 1.0, "affixes": 0, "specials": 0, "weight": 60.0},
-	{"name": "Uncommon",  "color": Color("5fd35f"), "mult": 1.3, "affixes": 1, "specials": 0, "weight": 25.0},
-	{"name": "Rare",      "color": Color("4aa3ff"), "mult": 1.7, "affixes": 2, "specials": 0, "weight": 10.0},
-	{"name": "Epic",      "color": Color("b05cff"), "mult": 2.2, "affixes": 2, "specials": 1, "weight": 4.0},
-	{"name": "Legendary", "color": Color("ffae2b"), "mult": 2.9, "affixes": 3, "specials": 1, "weight": 0.9},
-	{"name": "Mythic",    "color": Color("ff4d6d"), "mult": 3.8, "affixes": 3, "specials": 2, "weight": 0.1},
+	{"name": "Common",    "color": Color("a7adba"), "mult": 1.0, "affixes": 0, "specials": 0, "weight": 60.0},
+	{"name": "Uncommon",  "color": Color("4ade80"), "mult": 1.3, "affixes": 1, "specials": 0, "weight": 25.0},
+	{"name": "Rare",      "color": Color("38bdf8"), "mult": 1.7, "affixes": 2, "specials": 0, "weight": 10.0},
+	{"name": "Epic",      "color": Color("a78bfa"), "mult": 2.2, "affixes": 2, "specials": 1, "weight": 4.0},
+	{"name": "Legendary", "color": Color("fbbf24"), "mult": 2.9, "affixes": 3, "specials": 1, "weight": 0.9},
+	{"name": "Mythic",    "color": Color("f43f5e"), "mult": 3.8, "affixes": 3, "specials": 2, "weight": 0.1},
 ]
 
 

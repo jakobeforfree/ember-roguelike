@@ -124,20 +124,20 @@ func _frames(n: int) -> void:
 
 
 func test_telegraph_shapes() -> void:
-	var c := Telegraph.circle(Vector2(100, 100), 50, 1.0)
+	var c := Telegraph.circle(Vector3(10, 0, 10), 2.0, 1.0)
 	add_child(c)
-	check(c.contains(Vector2(140, 100)), "inside circle")
-	check(not c.contains(Vector2(170, 100)), "outside circle")
-	check(c.contains(Vector2(170, 100), 25), "circle overlap with target radius")
-	var l := Telegraph.lane(Vector2.ZERO, Vector2.RIGHT, 300, 40, 1.0)
+	check(c.contains(Vector3(11.5, 0, 10)), "inside circle")
+	check(not c.contains(Vector3(12.5, 0, 10)), "outside circle")
+	check(c.contains(Vector3(12.5, 0, 10), 0.6), "circle overlap with target radius")
+	var l := Telegraph.lane(Vector3.ZERO, Vector3(1, 0, 0), 8.0, 1.0, 1.0)
 	add_child(l)
-	check(l.contains(Vector2(250, 10)), "inside lane")
-	check(not l.contains(Vector2(250, 40)), "beside lane")
-	check(not l.contains(Vector2(-50, 0)), "behind lane")
-	var a := Telegraph.arc(Vector2.ZERO, Vector2.RIGHT, 100, 0.5, 1.0)
+	check(l.contains(Vector3(6, 0, 0.3)), "inside lane")
+	check(not l.contains(Vector3(6, 0, 1.2)), "beside lane")
+	check(not l.contains(Vector3(-1.5, 0, 0)), "behind lane")
+	var a := Telegraph.arc(Vector3.ZERO, Vector3(0, 0, -1), 3.0, 0.5, 1.0)
 	add_child(a)
-	check(a.contains(Vector2(80, 10)), "inside arc")
-	check(not a.contains(Vector2(-80, 0)), "behind arc")
+	check(a.contains(Vector3(0.3, 0, -2.5)), "inside arc")
+	check(not a.contains(Vector3(0, 0, 2.5)), "behind arc")
 	for t in [c, l, a]:
 		t.queue_free()
 
@@ -151,7 +151,7 @@ func _make_arena() -> Array:
 	var p := Player.new()
 	p.setup(StatBuilder.build("wanderer", [], {}), "bow")
 	p.room = room
-	p.position = Vector2(400, 400)
+	p.position = Vector3(10, 0, 10)
 	room.player = p
 	room.entities.add_child(p)
 	return [room, p]
@@ -169,7 +169,7 @@ func test_dodge_iframes_and_cooldown() -> void:
 	check(p.hp == hp0, "i-frames negate damage")
 	check(p.forced_crits == Player.PERFECT_CRITS, "perfect dodge grants empowered shots")
 	await _frames(45)
-	check(p.global_position.x > 400 + p.stats.get_stat("dodge_distance") * 0.8, "dash moved player (x=%s)" % p.global_position.x)
+	check(p.global_position.x > 10 + p.stats.get_stat("dodge_distance") * 0.8, "dash moved player (x=%s)" % p.global_position.x)
 	await _frames(30)
 	p.take_damage(30)
 	check(p.hp < hp0, "damage applies after i-frames")
@@ -187,7 +187,7 @@ func test_enemy_damage_procs_and_death() -> void:
 	var room: Room = arena[0]
 	var p: Player = arena[1]
 	p.stats.set_base("attack_range", 0.0)
-	var e := room.spawn_enemy("grunt", Vector2(700, 400))
+	var e := room.spawn_enemy("grunt", Vector3(18, 0, 10))
 	var died := [false]
 	e.died.connect(func(_e): died[0] = true)
 	check(not e.is_targetable(), "enemy untargetable while spawning in")
@@ -210,11 +210,25 @@ func test_enemy_damage_procs_and_death() -> void:
 func test_auto_attack_kills_enemy() -> void:
 	var arena := _make_arena()
 	var room: Room = arena[0]
-	var p: Player = arena[1]
-	var e := room.spawn_enemy("spitter", Vector2(400, 150))
+	var e := room.spawn_enemy("spitter", Vector3(10, 0, 3))
 	e.speed = 0.0
 	await _frames(240)
 	check(not is_instance_valid(e) or e.dead, "auto-attack killed a stationary enemy in 4s")
+	room.queue_free()
+
+
+func test_pathfinding_routes_around_obstacles() -> void:
+	var room := Room.new()
+	var rng := RandomNumberGenerator.new()
+	room.build(rng, 0.0, false, 0)
+	room.obstacles = [Rect2(10, 5, 2, 10)]
+	room._build_nav()
+	add_child(room)
+	var from := Vector2(6, 10)
+	var to := Vector2(16, 10)
+	check(room.segment_blocked(from, to), "wall blocks direct line")
+	var wp := room.next_waypoint(from, to, 0.5)
+	check(not room.segment_blocked(from, wp, 0.4) and wp != to, "waypoint is a reachable detour")
 	room.queue_free()
 
 

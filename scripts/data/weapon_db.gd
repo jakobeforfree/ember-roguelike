@@ -8,9 +8,9 @@ const WEAPONS := {
 	"bow": {
 		"name": "Bow",
 		"behavior": "res://scripts/weapons/bow_behavior.gd",
-		"base": {"damage": 14.0, "attack_speed": 1.5, "attack_range": 520.0, "projectile_speed": 950.0},
+		"base": {"damage": 14.0, "attack_speed": 1.5, "attack_range": 13.0, "projectile_speed": 24.0},
 		"item_names": ["Ashwood Bow", "Ember Longbow", "Hunter's Recurve", "Cinder Arc"],
-		"color": Color("e8c36a"),
+		"color": Color("ffc56b"),
 	},
 	# Planned:
 	# "sword":    melee arc sweep, short range, cleaves, high damage

@@ -12,16 +12,16 @@ const DEFAULTS := {
 	"max_hp": 100.0,
 	"damage": 10.0,
 	"attack_speed": 1.0,        # attacks per second
-	"attack_range": 480.0,
-	"projectile_speed": 900.0,
-	"move_speed": 260.0,
+	"attack_range": 12.0,
+	"projectile_speed": 22.0,
+	"move_speed": 6.5,
 	"crit_chance": 0.05,
 	"crit_mult": 1.6,
 	"damage_reduction": 0.0,    # 0..0.7
 	"hp_regen": 0.0,            # hp per second
 	"lifesteal": 0.0,           # fraction of damage dealt
 	"dodge_cooldown": 1.2,
-	"dodge_distance": 210.0,
+	"dodge_distance": 5.2,
 	"iframe_time": 0.32,
 	"dash_damage": 0.0,         # damage dealt to enemies you dash through
 	"multishot": 0.0,           # extra forward projectiles

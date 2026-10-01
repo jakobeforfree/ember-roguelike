@@ -1,9 +1,12 @@
 class_name Enemy
-extends CharacterBody2D
-## Base enemy: health, status effects, spawn-in warning and telegraph ownership.
-## Subclasses implement `_think(delta)` as a small state machine that sets velocity.
+extends CharacterBody3D
+## Base enemy: health, status effects, spawn-in, telegraph ownership and animation.
+## Subclasses build a model and implement `_think(delta)` as a small state machine.
 
 signal died(enemy: Enemy)
+
+const SPAWN_TIME := 0.8
+const TELL_STATES := ["windup", "aim", "busy"]
 
 var enemy_id := ""
 var def: Dictionary
@@ -13,16 +16,20 @@ var difficulty := 0.0
 var max_hp := 50.0
 var hp := 50.0
 var damage := 10.0
-var speed := 120.0
-var radius := 20.0
+var speed := 3.0
+var radius := 0.5
+var bar_height := 1.7
 var color := Color.RED
 var dead := false
 var is_boss := false
 
 var state := "chase"
 var state_time := 0.0
-var spawn_left := 0.8
+var spawn_left := SPAWN_TIME
 var telegraphs: Array = []
+var facing := Vector3.BACK
+var model: Node3D
+var _meshes: Array = []
 
 var poison_dps := 0.0
 var poison_left := 0.0
@@ -30,9 +37,10 @@ var burn_dps := 0.0
 var burn_left := 0.0
 var slow_left := 0.0
 var _status_tick := 0.0
+var _flash := 0.0
 var _waypoint := Vector2.ZERO
 var _repath := 0.0
-var _flash := 0.0
+var _t := 0.0
 
 
 func setup(id: String, diff: float, p_room: Room, p_player: Player) -> void:
@@ -51,14 +59,28 @@ func setup(id: String, diff: float, p_room: Room, p_player: Player) -> void:
 
 func _ready() -> void:
 	add_to_group("enemies")
+	motion_mode = CharacterBody3D.MOTION_MODE_FLOATING
 	collision_layer = 4
 	collision_mask = 1 | 4
-	var shape := CollisionShape2D.new()
-	var circle := CircleShape2D.new()
-	circle.radius = radius
-	shape.shape = circle
+	var shape := CollisionShape3D.new()
+	var cyl := CylinderShape3D.new()
+	cyl.radius = radius
+	cyl.height = 1.6
+	shape.shape = cyl
+	shape.position.y = 0.8
 	add_child(shape)
+	model = _build_model()
+	add_child(model)
+	_meshes = model.find_children("*", "MeshInstance3D", true, false)
+	model.scale = Vector3.ONE * 0.01
+	Fx.ring(get_parent(), global_position, color, radius * 2.5, SPAWN_TIME)
+	if player_alive():
+		facing = to_player().normalized()
 	_on_ready()
+
+
+func _build_model() -> Node3D:
+	return Models.grunt(color)
 
 
 func _on_ready() -> void:
@@ -73,8 +95,12 @@ func player_alive() -> bool:
 	return player != null and is_instance_valid(player) and not player.dead
 
 
-func to_player() -> Vector2:
-	return player.global_position - global_position if player_alive() else Vector2.ZERO
+func to_player() -> Vector3:
+	if not player_alive():
+		return Vector3.ZERO
+	var v := player.global_position - global_position
+	v.y = 0.0
+	return v
 
 
 func slow_mult() -> float:
@@ -87,42 +113,82 @@ func set_state(s: String) -> void:
 
 
 func has_los() -> bool:
-	return player_alive() and not room.segment_blocked(global_position, player.global_position)
+	return player_alive() and not room.segment_blocked(Flat.xz(global_position), Flat.xz(player.global_position))
 
 
 func _physics_process(delta: float) -> void:
 	if dead:
 		return
+	_t += delta
 	_flash = maxf(0.0, _flash - delta)
-	queue_redraw()
 	if spawn_left > 0.0:
 		spawn_left -= delta
+		var k := 1.0 - maxf(spawn_left, 0.0) / SPAWN_TIME
+		model.scale = Vector3.ONE * maxf(0.01, ease(k, 0.4))
 		return
 	_tick_status(delta)
 	if dead:
 		return
 	state_time += delta
-	velocity = Vector2.ZERO
+	velocity = Vector3.ZERO
 	_think(delta)
 	move_and_slide()
+	position.y = 0.0
+	_animate(delta)
 
 
 func _think(_delta: float) -> void:
 	pass
 
 
-## Moves toward a direction with simple obstacle sliding.
-func steer(dir: Vector2, mult: float = 1.0) -> void:
+func _animate(delta: float) -> void:
+	var v := Vector3(velocity.x, 0, velocity.z)
+	if v.length() > 0.2 and state == "chase":
+		facing = v.normalized()
+	model.rotation.y = lerp_angle(model.rotation.y, Flat.yaw(facing), 1.0 - exp(-10.0 * delta))
+	var telling := state in TELL_STATES
+	var target_scale := Vector3.ONE
+	if telling:
+		# Wind-up "tell": crouch and tremble so the attack reads even off-telegraph.
+		target_scale = Vector3(1.12, 0.88, 1.12)
+		model.position.x = randf_range(-0.03, 0.03)
+	else:
+		model.position.x = 0.0
+	model.scale = model.scale.lerp(target_scale, 1.0 - exp(-12.0 * delta))
+	model.position.y = absf(sin(_t * 9.0)) * 0.06 if v.length() > 0.2 else 0.0
+	var ov: Material = null
+	if _flash > 0.0:
+		ov = Mats.overlay(Color(1, 1, 1, 0.75))
+	elif slow_left > 0.0:
+		ov = Mats.overlay(Color(0.5, 0.85, 1.0, 0.35))
+	elif poison_left > 0.0:
+		ov = Mats.overlay(Color(0.55, 0.95, 0.3, 0.3))
+	elif burn_left > 0.0:
+		ov = Mats.overlay(Color(1.0, 0.55, 0.15, 0.3))
+	elif telling:
+		ov = Mats.overlay(Color(1.0, 0.3, 0.2, 0.18 + 0.12 * sin(_t * 30.0)))
+	for m in _meshes:
+		m.material_overlay = ov
+
+
+func steer(dir: Vector3, mult: float = 1.0) -> void:
+	dir.y = 0.0
 	velocity = dir.normalized() * speed * mult * slow_mult()
 
 
 ## Walks toward a world point, pathing around obstacles when needed.
-func steer_to(target: Vector2, mult: float = 1.0) -> void:
+func steer_to(target: Vector3, mult: float = 1.0) -> void:
 	_repath -= get_physics_process_delta_time()
-	if _repath <= 0.0 or global_position.distance_to(_waypoint) < 12.0:
+	var here := Flat.xz(global_position)
+	if _repath <= 0.0 or here.distance_to(_waypoint) < 0.3:
 		_repath = 0.25
-		_waypoint = room.next_waypoint(global_position, target, radius * 0.8)
-	steer(_waypoint - global_position, mult)
+		_waypoint = room.next_waypoint(here, Flat.xz(target), radius * 0.8)
+	steer(Flat.v3(_waypoint - here), mult)
+
+
+func face_player() -> void:
+	if player_alive():
+		facing = to_player().normalized()
 
 
 func _tick_status(delta: float) -> void:
@@ -140,11 +206,10 @@ func _tick_status(delta: float) -> void:
 		if burn_left > 0.0:
 			dot += burn_dps * 0.5
 		if dot > 0.0:
-			take_damage(dot, false, Color("a6e05a") if poison_left > 0.0 else Color("ff9f43"))
+			take_damage(dot, false, Color("a3e635") if poison_left > 0.0 else Color("fb923c"))
 
 
 func add_poison(dps: float, duration: float) -> void:
-	# Poison stacks intensity (capped) and refreshes duration.
 	poison_dps = minf(poison_dps + dps, dps * 5.0)
 	poison_left = duration
 
@@ -163,8 +228,8 @@ func take_damage(amount: float, crit: bool = false, text_color: Color = Color.WH
 		return
 	hp -= amount
 	_flash = 0.08
-	var c := Color("ffd23f") if crit else text_color
-	Fx.float_text(get_parent(), global_position + Vector2(0, -radius), str(roundi(amount)) + ("!" if crit else ""), c, 30 if crit else 20)
+	var c := Color("fde047") if crit else text_color
+	Fx.text(get_parent(), global_position + Vector3(0, bar_height - 1.6, 0), str(roundi(amount)) + ("!" if crit else ""), c, 64 if crit else 44)
 	if hp <= 0.0:
 		die()
 
@@ -175,7 +240,8 @@ func die() -> void:
 	dead = true
 	clear_telegraphs()
 	remove_from_group("enemies")
-	Fx.spawn(get_parent(), Fx.Kind.BURST, global_position, color, radius * 1.8, 0.35)
+	Fx.burst(get_parent(), global_position, color, 1.0 + radius, 18 if not is_boss else 60)
+	Fx.ring(get_parent(), global_position, color, radius * 3.0, 0.4)
 	Events.enemy_killed.emit(enemy_id, global_position)
 	died.emit(self)
 	queue_free()
@@ -217,39 +283,15 @@ func after(sec: float, cb: Callable) -> void:
 	t.start()
 
 
-func fire_projectile(dir: Vector2, proj_speed: float, dmg: float, size: float = 9.0) -> void:
+func fire_projectile(dir: Vector3, proj_speed: float, dmg: float, size: float = 0.25) -> void:
+	dir.y = 0.0
 	var p := Projectile.new()
 	p.team = Projectile.Team.ENEMY
-	p.global_position = global_position + dir * (radius + 6.0)
+	p.position = global_position + dir.normalized() * (radius + 0.2)
 	p.velocity = dir.normalized() * proj_speed
 	p.damage = dmg
 	p.radius = size
-	p.max_distance = 1400.0
-	p.color = color.lightened(0.3)
+	p.max_distance = 35.0
+	p.color = color.lightened(0.1)
 	p.room = room
 	get_parent().add_child(p)
-
-
-func _draw() -> void:
-	if spawn_left > 0.0:
-		var t := 1.0 - spawn_left / 0.8
-		draw_arc(Vector2.ZERO, radius * 1.6, 0, TAU, 32, Color(color, 0.8), 3.0)
-		draw_circle(Vector2.ZERO, radius * t, Color(color, 0.5))
-		return
-	var body := Color.WHITE if _flash > 0.0 else color
-	if slow_left > 0.0:
-		body = body.lerp(Color("8fd3ff"), 0.4)
-	draw_circle(Vector2(0, radius * 0.3), radius, Color(0, 0, 0, 0.3))
-	_draw_body(body)
-	if poison_left > 0.0:
-		draw_arc(Vector2.ZERO, radius + 4.0, 0, TAU, 20, Color("a6e05a"), 2.0)
-	if burn_left > 0.0:
-		draw_arc(Vector2.ZERO, radius + 7.0, 0, TAU, 20, Color("ff9f43"), 2.0)
-	if not is_boss and hp < max_hp:
-		var w := radius * 2.0
-		draw_rect(Rect2(-w * 0.5, -radius - 12.0, w, 5.0), Color(0, 0, 0, 0.6))
-		draw_rect(Rect2(-w * 0.5, -radius - 12.0, w * hp / max_hp, 5.0), Color("ff5a5a"))
-
-
-func _draw_body(body: Color) -> void:
-	draw_circle(Vector2.ZERO, radius, body)

@@ -1,48 +1,57 @@
 class_name RunController
-extends Node2D
+extends Node3D
 ## Owns a single run: builds rooms, moves the player between them, offers upgrades,
 ## drops loot, and reports the result. Death discards the run but loot stays banked.
 
 signal run_finished
 
-const CAMERA_ZOOM := 0.9
 const ROOM_LOOT_CHANCE := 0.35
+const CAM_OFFSET := Vector3(0, 21.0, 9.0)    # tilted top-down view (~67 degrees)
+const CAM_FOV := 44.0
 
 var run: RunState
 var room: Room
 var player: Player
-var camera: Camera2D
+var camera: Camera3D
 var ui: CanvasLayer
 var hud: Hud
 var upgrade_panel: UpgradePanel
 var modal: MessagePanel
-var _ending := false
 var input_enabled := true   # false = something else (tests, replays, autoplay) drives the player
+var _ending := false
 
 
 func start(seed_value: int = -1) -> void:
 	run = RunState.new(seed_value)
 	run.character_id = Profile.character_id
 	Engine.time_scale = 1.0
+	WorldKit.setup(self)
 
-	camera = Camera2D.new()
-	camera.zoom = Vector2.ONE * CAMERA_ZOOM
+	camera = Camera3D.new()
+	camera.fov = CAM_FOV
+	camera.current = true
 	add_child(camera)
 
 	ui = CanvasLayer.new()
 	add_child(ui)
+	var root := Control.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.theme = UiKit.theme()
+	ui.add_child(root)
 	hud = Hud.new()
-	ui.add_child(hud)
+	hud.camera = camera
+	root.add_child(hud)
 	hud.dodge.pressed.connect(_on_dodge_pressed)
 	hud.pause_pressed.connect(_open_pause)
 	upgrade_panel = UpgradePanel.new()
 	upgrade_panel.visible = false
 	upgrade_panel.chosen.connect(_on_upgrade_chosen)
-	ui.add_child(upgrade_panel)
+	root.add_child(upgrade_panel)
 	modal = MessagePanel.new()
 	modal.visible = false
 	modal.action.connect(_on_modal_action)
-	ui.add_child(modal)
+	root.add_child(modal)
 
 	player = Player.new()
 	player.setup(_build_stats(), StatBuilder.weapon_id_for(run.character_id, Profile.equipped_items()))
@@ -52,7 +61,7 @@ func start(seed_value: int = -1) -> void:
 	hud.set_hp(player.hp, player.max_hp)
 	_load_room()
 	# Every run starts with one free pick so builds diverge immediately.
-	_offer_upgrade("Choose a Starting Boon")
+	_offer_upgrade("Choose a Starting Boon", "Your first blessing for this descent")
 
 
 func _build_stats() -> Stats:
@@ -69,20 +78,19 @@ func _load_room() -> void:
 	room.player = player
 	room.build(run.rng, run.difficulty(), run.is_boss_room(), run.room_index)
 	add_child(room)
-	move_child(room, 0)
 	player.room = room
 	player.position = room.player_spawn()
-	player.velocity = Vector2.ZERO
+	player.velocity = Vector3.ZERO
+	player.facing = Vector3.FORWARD
 	room.entities.add_child(player)
 	room.cleared.connect(_on_room_cleared)
 	room.exit_reached.connect(_on_exit_reached)
-	camera.position = player.position
-	camera.reset_smoothing()
+	_update_camera(1.0)
 	_update_room_label()
 	if run.is_boss_room():
-		hud.show_message("BOSS: CINDER GOLEM", 2.0)
+		hud.show_message("CINDER GOLEM", 2.0, "Stage %d guardian" % run.stage, Color("fdba74"))
 	else:
-		hud.show_message("Room %d" % (run.room_index + 1), 1.0)
+		hud.show_message("ROOM %d" % (run.room_index + 1), 1.0, "Stage %d" % run.stage)
 
 
 func _start_room_combat() -> void:
@@ -93,8 +101,12 @@ func _start_room_combat() -> void:
 
 func _update_room_label() -> void:
 	var wave_text := ""
-	if room and not room.is_boss_room and room.waves.size() > 0 and not room.is_cleared():
-		wave_text = "  ·  Wave %d/%d" % [clampi(room.wave_index + 1, 1, room.waves.size()), room.waves.size()]
+	if room and room.is_boss_room and not room.is_cleared():
+		wave_text = "BOSS"
+	elif room and room.waves.size() > 0 and not room.is_cleared():
+		wave_text = "WAVE %d / %d" % [clampi(room.wave_index + 1, 1, room.waves.size()), room.waves.size()]
+	elif room and room.is_cleared():
+		wave_text = "CLEARED"
 	hud.set_room(run.stage, run.room_index + 1, RunState.ROOMS_PER_STAGE, wave_text)
 	hud.set_gold(run.gold)
 
@@ -105,9 +117,10 @@ func _physics_process(_delta: float) -> void:
 	if input_enabled:
 		player.move_input = _read_move_input()
 	hud.dodge.cooldown_ratio = player.dodge_cooldown_ratio()
+	hud.dodge.cooldown_left = player.dodge_cd_left
 	if room and room.boss and is_instance_valid(room.boss):
 		hud.set_boss(room.boss)
-	_update_camera()
+	_update_camera(0.12)
 	_update_room_label()
 
 
@@ -129,16 +142,18 @@ func _unhandled_input(event: InputEvent) -> void:
 			_open_pause()
 
 
-func _update_camera() -> void:
-	var view := get_viewport_rect().size / camera.zoom
-	var target := player.global_position
-	var b := room.bounds.grow(60.0)
+## Follows the player, kept inside the arena so walls frame the view.
+func _update_camera(weight: float) -> void:
+	var b := room.bounds
+	var target := Flat.xz(player.global_position)
+	var margin := Vector2(9.0, 6.0)
 	for axis in 2:
-		if b.size[axis] <= view[axis]:
-			target[axis] = b.get_center()[axis]
-		else:
-			target[axis] = clampf(target[axis], b.position[axis] + view[axis] * 0.5, b.end[axis] - view[axis] * 0.5)
-	camera.position = camera.position.lerp(target, 0.15)
+		var lo := b.position[axis] + margin[axis]
+		var hi := b.end[axis] - margin[axis] * (0.6 if axis == 1 else 1.0)
+		target[axis] = b.get_center()[axis] if lo > hi else clampf(target[axis], lo, hi)
+	var desired := Flat.v3(target) + CAM_OFFSET
+	camera.position = camera.position.lerp(desired, weight)
+	camera.look_at(camera.position - CAM_OFFSET, Vector3.UP)
 
 
 func _on_dodge_pressed() -> void:
@@ -157,10 +172,10 @@ func _on_room_cleared() -> void:
 	_drop_loot()
 	if run.is_boss_room():
 		hud.set_boss(null)
-		hud.show_message("STAGE %d CLEARED!" % run.stage, 2.5)
+		hud.show_message("STAGE %d CLEARED" % run.stage, 2.5, "The golem crumbles", UiKit.GOLD)
 	else:
-		hud.show_message("ROOM CLEARED", 1.2)
-	get_tree().create_timer(0.9, false).timeout.connect(func():
+		hud.show_message("CLEARED", 1.2, "", UiKit.TEAL)
+	get_tree().create_timer(1.0, false).timeout.connect(func():
 		if not player.dead:
 			_offer_upgrade())
 
@@ -173,14 +188,15 @@ func _drop_loot() -> void:
 		drops.append(LootGenerator.generate(run.rng, run.item_level(), Rarity.roll(run.rng, luck)))
 	elif run.rng.randf() < ROOM_LOOT_CHANCE:
 		drops.append(LootGenerator.generate(run.rng, run.item_level(), Rarity.roll(run.rng, luck)))
-	var center := Vector2(room.bounds.size.x * 0.5, room.bounds.size.y * 0.5)
+	var center := room.bounds.get_center()
 	for i in drops.size():
 		var pickup := LootPickup.new()
 		pickup.item = drops[i]
 		pickup.player = player
-		pickup.position = center + Vector2((i - (drops.size() - 1) * 0.5) * 90.0, 0)
-		while room.is_blocked(pickup.position, 30.0):
-			pickup.position.y += 40.0
+		var p := center + Vector2((i - (drops.size() - 1) * 0.5) * 2.2, 0)
+		while room.is_blocked(p, 0.8):
+			p.y += 1.0
+		pickup.position = Flat.v3(p)
 		pickup.collected.connect(_on_loot_collected)
 		room.entities.add_child(pickup)
 
@@ -192,13 +208,16 @@ func _on_loot_collected(item: GearItem) -> void:
 	Events.loot_found.emit(item)
 
 
-func _offer_upgrade(title: String = "Choose an Upgrade") -> void:
+func _offer_upgrade(title: String = "Choose a Boon", subtitle: String = "") -> void:
 	var choices := UpgradeDB.roll_choices(run.rng, run.upgrades)
 	if choices.is_empty():
 		_after_upgrade()
 		return
+	if subtitle == "":
+		subtitle = "Stage %d · Room %d of %d" % [run.stage, run.room_index + 1, RunState.ROOMS_PER_STAGE]
 	get_tree().paused = true
-	upgrade_panel.open(choices, run.upgrades, title)
+	hud.hide_message()
+	upgrade_panel.open(choices, run.upgrades, title, subtitle)
 
 
 func _on_upgrade_chosen(id: String) -> void:
@@ -211,6 +230,7 @@ func _on_upgrade_chosen(id: String) -> void:
 func apply_upgrade(id: String) -> void:
 	run.add_upgrade(id)
 	player.refresh_stats(_build_stats())
+	hud.set_upgrades(run.upgrades)
 	var heal: float = UpgradeDB.get_def(id).get("heal", 0.0)
 	if heal > 0.0:
 		player.heal(player.max_hp * heal)
@@ -219,7 +239,7 @@ func apply_upgrade(id: String) -> void:
 func _after_upgrade() -> void:
 	if room.is_cleared():
 		room.open_door()
-		hud.show_message("Door open ▲", 1.2)
+		hud.show_message("GATE OPEN", 1.2, "Head north to continue", UiKit.ACCENT)
 	else:
 		_start_room_combat()
 
@@ -234,7 +254,9 @@ func _ready() -> void:
 	Events.enemy_killed.connect(_on_enemy_killed)
 
 
-func _on_enemy_killed(id: String, _pos: Vector2) -> void:
+func _on_enemy_killed(id: String, _pos: Vector3) -> void:
+	if run == null or player == null:
+		return
 	run.kills += 1
 	var base: int = EnemyDB.get_def(id)["gold"]
 	run.gold += int(ceil(base * (1.0 + 0.2 * (run.stage - 1)) * (1.0 + player.stats.get_stat("gold_find"))))
@@ -243,41 +265,39 @@ func _on_enemy_killed(id: String, _pos: Vector2) -> void:
 # --- End of run ------------------------------------------------------------
 
 func _on_player_died() -> void:
-	hud.show_message("YOU FELL", 2.0)
-	get_tree().create_timer(1.2, false).timeout.connect(_show_game_over)
+	hud.show_message("YOU FELL", 2.0, "", UiKit.DANGER)
+	get_tree().create_timer(1.4, false).timeout.connect(_show_game_over)
 
 
 func _show_game_over() -> void:
 	_finish_run()
-	var lines := PackedStringArray([
-		"Reached Stage %d, Room %d" % [run.stage, run.room_index + 1],
-		"Enemies defeated: %d" % run.kills,
-		"Gold earned: %d" % run.gold,
-	])
+	var lines := [
+		"Reached Stage %d · Room %d" % [run.stage, run.room_index + 1],
+		"%d enemies defeated · %d gold earned" % [run.kills, run.gold],
+	]
 	_append_loot_lines(lines)
 	get_tree().paused = true
-	modal.open("DEFEATED", Color("ff5a5a"), lines, [["camp", "Return to Camp"]])
+	modal.open("DEFEATED", UiKit.DANGER, "dangerous", lines, [["camp", "Return to Camp", "primary", "home"]])
 
 
-func _append_loot_lines(lines: PackedStringArray) -> void:
+func _append_loot_lines(lines: Array) -> void:
 	if run.loot.is_empty():
 		lines.append("No gear found this run")
 		return
 	lines.append("Gear kept:")
 	for it in run.loot:
-		lines.append("#%s|%s" % [Rarity.color_of(it.rarity).to_html(false), it.display_name()])
+		lines.append([it.display_name(), Rarity.color_of(it.rarity)])
 
 
 func _open_pause() -> void:
 	if get_tree().paused or player.dead:
 		return
 	get_tree().paused = true
-	var lines := PackedStringArray(["Stage %d · Room %d" % [run.stage, run.room_index + 1], "Upgrades:"])
 	var ups := []
 	for id in run.upgrades:
-		ups.append("%s x%d" % [UpgradeDB.get_def(id)["name"], run.upgrades[id]])
-	lines.append(", ".join(ups) if ups.size() > 0 else "none yet")
-	modal.open("PAUSED", UiKit.ACCENT, lines, [["resume", "Resume"], ["retreat", "Retreat to Camp (keep loot & gold)", Color("6b5a73")]])
+		ups.append("%s ×%d" % [UpgradeDB.get_def(id)["name"], run.upgrades[id]])
+	var lines := ["Stage %d · Room %d" % [run.stage, run.room_index + 1], ", ".join(ups) if ups.size() > 0 else "No boons yet"]
+	modal.open("PAUSED", UiKit.ACCENT, "pause", lines, [["resume", "Resume", "primary", "play_arrow"], ["retreat", "Retreat to Camp", "secondary", "home"]])
 
 
 func _finish_run() -> void:

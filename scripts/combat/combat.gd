@@ -3,8 +3,8 @@ extends RefCounted
 ## Central damage pipeline. Keeping hit logic here (instead of inside weapons)
 ## means every weapon automatically supports crits, lifesteal and elemental procs.
 
-const CHAIN_RANGE := 260.0
-const EXPLODE_RADIUS := 110.0
+const CHAIN_RANGE := 6.5
+const EXPLODE_RADIUS := 2.8
 
 
 ## Rolls outgoing damage for a player attack. Returns [amount, is_crit].
@@ -53,21 +53,22 @@ static func chain_lightning(player, from_enemy, amount: float, jumps: int) -> vo
 		for e in tree.get_nodes_in_group("enemies"):
 			if hit.has(e) or not e.is_targetable():
 				continue
-			var d: float = current.global_position.distance_to(e.global_position)
+			var d := Flat.dist(current.global_position, e.global_position)
 			if d < best_d:
 				best_d = d
 				best = e
 		if best == null:
 			return
-		Fx.bolt(current.get_parent(), current.global_position, best.global_position, Color("8fd3ff"))
+		Fx.bolt(current.get_parent(), current.global_position, best.global_position, Color("7dd3fc"))
 		hit[best] = true
 		player_hits_enemy(player, best, amount, false, false)
 		current = best
 
 
-static func explode(player, pos: Vector2, amount: float) -> void:
+static func explode(player, pos: Vector3, amount: float) -> void:
 	var tree: SceneTree = player.get_tree()
-	Fx.spawn(player.get_parent(), Fx.Kind.BURST, pos, Color("ff9f43"), EXPLODE_RADIUS, 0.3)
+	Fx.ring(player.get_parent(), pos, Color("ff9f43"), EXPLODE_RADIUS, 0.3)
+	Fx.burst(player.get_parent(), pos, Color("ffb347"), 1.0, 14)
 	for e in tree.get_nodes_in_group("enemies"):
-		if e.is_targetable() and e.global_position.distance_to(pos) <= EXPLODE_RADIUS + e.radius:
+		if e.is_targetable() and Flat.dist(e.global_position, pos) <= EXPLODE_RADIUS + e.radius:
 			player_hits_enemy(player, e, amount, false, false)

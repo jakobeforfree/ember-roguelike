@@ -1,28 +1,27 @@
 class_name LootPickup
-extends Node2D
+extends Node3D
 ## A gear drop on the floor. Walk over it to bank it into the persistent profile.
 
 signal collected(item: GearItem)
 
 var item: GearItem
 var player: Player
+var _gem: Node3D
 var _t := 0.0
+
+
+func _ready() -> void:
+	var m := Models.loot(Rarity.color_of(item.rarity))
+	add_child(m)
+	_gem = m.get_node("Gem")
 
 
 func _physics_process(delta: float) -> void:
 	_t += delta
-	queue_redraw()
-	if player and not player.dead and global_position.distance_to(player.global_position) < 44.0:
+	_gem.rotation.y += delta * 2.0
+	_gem.position.y = 0.9 + sin(_t * 3.0) * 0.12
+	if player and not player.dead and Flat.dist(global_position, player.global_position) < 1.1:
 		collected.emit(item)
-		Fx.float_text(get_parent(), global_position, item.display_name(), Rarity.color_of(item.rarity), 24)
+		Fx.text(get_parent(), global_position + Vector3(0, 0.5, 0), item.name, Rarity.color_of(item.rarity), 52)
+		Fx.ring(get_parent(), global_position, Rarity.color_of(item.rarity), 2.0, 0.4)
 		queue_free()
-
-
-func _draw() -> void:
-	var c := Rarity.color_of(item.rarity)
-	var bob := sin(_t * 4.0) * 4.0
-	draw_rect(Rect2(-3, -140, 6, 140), Color(c, 0.18))
-	draw_circle(Vector2(0, 6), 14.0, Color(0, 0, 0, 0.3))
-	var s := 14.0
-	draw_colored_polygon(PackedVector2Array([Vector2(0, -s + bob), Vector2(s, bob), Vector2(0, s + bob), Vector2(-s, bob)]), c)
-	draw_arc(Vector2(0, bob), 22.0 + sin(_t * 3.0) * 3.0, 0, TAU, 24, Color(c, 0.6), 2.0)

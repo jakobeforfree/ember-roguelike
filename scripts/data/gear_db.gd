@@ -6,18 +6,18 @@ extends RefCounted
 const SLOTS := ["weapon", "helmet", "chest", "gloves", "boots", "ring", "amulet"]
 
 const SLOT_INFO := {
-	"weapon": {"label": "Weapon", "implicit": {"stat": "damage", "kind": "flat", "value": 3.0}},
-	"helmet": {"label": "Helmet", "implicit": {"stat": "max_hp", "kind": "flat", "value": 12.0},
+	"weapon": {"label": "Weapon", "icon": "my_location", "implicit": {"stat": "damage", "kind": "flat", "value": 3.0}},
+	"helmet": {"label": "Helmet", "icon": "sports_motorsports", "implicit": {"stat": "max_hp", "kind": "flat", "value": 12.0},
 		"names": ["Iron Cap", "Ashen Hood", "Warden Helm"]},
-	"chest":  {"label": "Chest",  "implicit": {"stat": "damage_reduction", "kind": "flat", "value": 0.03},
+	"chest": {"label": "Chest", "icon": "shield",  "implicit": {"stat": "damage_reduction", "kind": "flat", "value": 0.03},
 		"names": ["Padded Vest", "Scale Mail", "Ember Plate"]},
-	"gloves": {"label": "Gloves", "implicit": {"stat": "attack_speed", "kind": "pct", "value": 0.05},
+	"gloves": {"label": "Gloves", "icon": "back_hand", "implicit": {"stat": "attack_speed", "kind": "pct", "value": 0.05},
 		"names": ["Leather Grips", "Quickdraw Gloves", "Smolder Gauntlets"]},
-	"boots":  {"label": "Boots",  "implicit": {"stat": "move_speed", "kind": "pct", "value": 0.04},
+	"boots": {"label": "Boots", "icon": "hiking",  "implicit": {"stat": "move_speed", "kind": "pct", "value": 0.04},
 		"names": ["Worn Boots", "Strider Boots", "Ashwalkers"]},
-	"ring":   {"label": "Ring",   "implicit": {"stat": "crit_chance", "kind": "flat", "value": 0.03},
+	"ring": {"label": "Ring", "icon": "radio_button_checked",   "implicit": {"stat": "crit_chance", "kind": "flat", "value": 0.03},
 		"names": ["Copper Band", "Spark Ring", "Signet of Embers"]},
-	"amulet": {"label": "Amulet", "implicit": {"stat": "damage", "kind": "pct", "value": 0.05},
+	"amulet": {"label": "Amulet", "icon": "diamond", "implicit": {"stat": "damage", "kind": "pct", "value": 0.05},
 		"names": ["Bone Charm", "Coal Pendant", "Heartflame Amulet"]},
 }
 

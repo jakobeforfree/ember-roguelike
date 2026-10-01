@@ -1,6 +1,7 @@
 # Ember Roguelike (prototype)
 
-An original mobile action roguelike built in **Godot 4.3** (GDScript, Compatibility renderer).
+An original mobile action roguelike built in **Godot 4.3** (GDScript, Compatibility renderer),
+rendered in stylized low-poly 3D from a tilted top-down camera.
 You move with a virtual joystick, your weapon fires on its own, and a dodge button with
 invincibility frames is your main defensive skill. You fight through randomized rooms, choose
 upgrades, beat a boss, and keep the gear you find between runs.
@@ -58,16 +59,26 @@ The mouse acts as a touch (`emulate_touch_from_mouse`), so you can test the touc
 ```
 scripts/
   autoload/   events.gd (signal bus), profile.gd (persistent save)
-  core/       stats.gd (modifier-based stats), stat_builder.gd, run_state.gd
+  core/       stats.gd (modifier-based stats), stat_builder.gd, run_state.gd, flat.gd (XZ-plane helpers)
+  visual/     models, materials, icons, world_kit (lighting/post)
   data/       rarity, gear_db, gear_item, loot_generator, weapon_db,
               upgrade_db, character_db, enemy_db   ← data tables
   combat/     player, enemy (base), enemies/*, projectile, telegraph, combat (damage + procs), fx
   weapons/    weapon_behavior.gd (base), bow_behavior.gd
-  world/      room.gd (layout, walls, A* nav, waves, door), run_controller.gd, loot_pickup.gd
-  ui/         hud, virtual_joystick, dodge_button, upgrade_panel, message_panel, hub, ui_kit
+  world/      room.gd (layout, walls, A* nav, waves, gate), run_controller.gd, camp_scene.gd, loot_pickup.gd
+  ui/         hud, virtual_joystick, dodge_button, upgrade_panel, message_panel, hub, ui_kit, badge, bar
+shaders/      telegraph + floor
+tools/        build_web.sh, fetch_web_templates.py (web build / Vercel)
 tests/        test_runner (headless tests + bot run), sim_bot, screenshots
 ```
-Placeholder art is drawn in code with `_draw()`, so there are no image files to replace yet.
+Art is placeholder low-poly 3D built from primitives in `scripts/visual/models.gd`
+(each model is just a `Node3D`, so imported `.glb` art can replace them one at a time).
+Look and feel live in a few places:
+- `scripts/visual/world_kit.gd` sets lighting, tonemapping, glow, fog and shadows
+- `shaders/telegraph.gdshader` draws the ground-projected attack warnings, `shaders/floor.gdshader` the floor tiles
+- `scripts/ui/ui_kit.gd` holds the UI design system (palette, Outfit font, Material Icons, buttons, chips, animations)
+
+Fonts are Outfit (SIL OFL) and Material Icons (Apache 2.0); licenses are in `assets/fonts/`.
 
 ### Where future features plug in
 | Feature | Where |
@@ -79,8 +90,8 @@ Placeholder art is drawn in code with `_draw()`, so there are no image files to 
 | Elemental builds | Elements are stats (`poison_dps`, `burn_chance`, `chain_chance`…) handled in `Combat`. |
 | Shops, crafting | `LootGenerator.generate(rng, level, rarity, slot)` and `Profile.gold` / `salvage`. |
 | Daily challenges | `RunState` takes a seed, so a seeded run is reproducible. `Events` covers kill and dodge tracking. |
-| Procedural maps | `Room.build()` and `LAYOUTS` can be swapped for a generator. Navigation (`AStarGrid2D`) rebuilds itself from obstacles. |
-| Cloud saves | `Profile.to_dict()` / `load_dict()` is a versioned JSON document ready to sync. |
+| Procedural maps | `Room.build()` and `LAYOUTS` can be swapped for a generator. Navigation (`AStarGrid2D`) and the 3D walls are built from the obstacle rectangles. |
+| Cloud saves | `Profile.to_dict()` / `load_dict()` is a versioned JSON document ready to sync (e.g. a Supabase table keyed by user id). |
 | Ability button | `Hud` has room above the dodge button. Add a button wired like `DodgeButton`. |
 
 ## Tests
@@ -94,6 +105,13 @@ godot --headless --fixed-fps 60 res://tests/test_runner.tscn   # exit code 0 = p
 ```
 `tests/screenshots.tscn` renders reference screenshots. It needs a display, for example
 `SHOT_DIR=/tmp/shots xvfb-run godot --rendering-driver opengl3 res://tests/screenshots.tscn`.
+
+## Web build (play on your phone's browser)
+`bash tools/build_web.sh` downloads Godot plus only the Web export template (~17 MB, taken from the
+1 GB template archive with HTTP range requests), then exports to `build/web`. `vercel.json` runs the
+same script, so a Vercel project connected to this repo rebuilds on every push. It uses the
+no-threads web build, so no special COOP/COEP headers are needed. It also installs as a
+full-screen landscape web app (PWA) from "Add to Home Screen".
 
 ## Exporting to Android / iOS
 1. In Godot: **Editor → Manage Export Templates → Download**.

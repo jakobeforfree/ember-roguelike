@@ -22,9 +22,9 @@ func _ready() -> void:
 	Profile.equip(Profile.inventory[4].uid)
 	var main = load("res://scripts/main.gd").new()
 	add_child(main)
-	main.hub._selected = Profile.inventory[5]
+	main.hub._selected = Profile.inventory[3]
 	main.hub.refresh()
-	await get_tree().create_timer(0.3).timeout
+	await get_tree().create_timer(0.8).timeout
 	await shot("01_hub")
 
 	var run: RunController = main.start_run(3)
@@ -35,13 +35,12 @@ func _ready() -> void:
 	run.upgrade_panel.pick(run.upgrade_panel.choices[0])
 	for e in run.room.alive.duplicate():
 		e.die()
-	var pp := run.player.global_position + Vector2(0, -260)
+	var pp := run.player.global_position + Vector3(0, 0, -7)
 	run.player.global_position = pp
-	run.camera.position = pp
 	run.player.stats.set_base("attack_range", 0.0)
-	var g := run.room.spawn_enemy("grunt", pp + Vector2(-80, -40))
-	var s1 := run.room.spawn_enemy("spitter", pp + Vector2(380, -180))
-	var c := run.room.spawn_enemy("charger", pp + Vector2(-420, -160))
+	var g := run.room.spawn_enemy("grunt", pp + Vector3(-2.0, 0, -1.0))
+	var s1 := run.room.spawn_enemy("spitter", pp + Vector3(9.0, 0, -4.5))
+	var c := run.room.spawn_enemy("charger", pp + Vector3(-10.0, 0, -3.5))
 	for i in 60 * 3:
 		await get_tree().physics_frame
 		if g.state == "windup" and s1.state == "aim" and c.state == "windup":
@@ -49,7 +48,7 @@ func _ready() -> void:
 	for i in 12:
 		await get_tree().physics_frame
 	await shot("03b_telegraphs_staged")
-	run.player.stats.set_base("attack_range", 520.0)
+	run.player.stats.set_base("attack_range", 13.0)
 	var bot := SimBot.new(run)
 	var took_combat := false
 	var took_boss := false
@@ -58,7 +57,7 @@ func _ready() -> void:
 		run.player.hp = run.player.max_hp
 		await get_tree().physics_frame
 		var tgs := run.room.ground.get_child_count()
-		var near := run.room.alive.filter(func(e): return is_instance_valid(e) and e.is_targetable() and e.global_position.distance_to(run.player.global_position) < 450.0).size()
+		var near := run.room.alive.filter(func(e): return is_instance_valid(e) and e.is_targetable() and Flat.dist(e.global_position, run.player.global_position) < 11.0).size()
 		if not took_combat and run.run.room_index >= 1 and tgs >= 2 and near >= 3:
 			took_combat = true
 			await shot("03_combat_telegraphs")

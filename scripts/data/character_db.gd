@@ -1,0 +1,18 @@
+class_name CharacterDB
+extends RefCounted
+## Playable characters (classes). MVP has one; later classes just add entries
+## with different base stats and a starting weapon / passive.
+
+const CHARACTERS := {
+	"wanderer": {
+		"name": "Ember Wanderer",
+		"color": Color("ff8c42"),
+		"base": {"max_hp": 120.0, "move_speed": 270.0, "crit_chance": 0.05, "crit_mult": 1.6,
+			"dodge_cooldown": 1.1, "dodge_distance": 210.0, "iframe_time": 0.32},
+		"default_weapon": "bow",
+	},
+}
+
+
+static func get_def(id: String) -> Dictionary:
+	return CHARACTERS.get(id, CHARACTERS["wanderer"])

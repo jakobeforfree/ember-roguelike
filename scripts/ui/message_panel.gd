@@ -5,6 +5,8 @@ extends Control
 
 signal action(id: String)
 
+var _ids: Array = []
+
 
 ## lines: Array of String or [text, color]. buttons: [[id, text, kind, icon], ...]
 func open(title: String, color: Color, icon_name: String, lines: Array, buttons: Array) -> void:
@@ -38,10 +40,27 @@ func open(title: String, color: Color, icon_name: String, lines: Array, buttons:
 	var gap := Control.new()
 	gap.custom_minimum_size.y = 10
 	v.add_child(gap)
+	_ids.clear()
 	for b in buttons:
+		_ids.append(b[0])
 		var btn := UiKit.button(b[1], b[2] if b.size() > 2 else "primary", 20, Vector2(0, 60), b[3] if b.size() > 3 else "")
 		var id: String = b[0]
 		btn.pressed.connect(func(): action.emit(id))
 		v.add_child(btn)
+	if not Controls.touch_mode and _ids.size() > 0:
+		var hint := UiKit.hint_row([["ENTER", "Confirm"]] + ([["ESC", "Resume"]] if "resume" in _ids else []))
+		hint.alignment = BoxContainer.ALIGNMENT_CENTER
+		v.add_child(hint)
 	visible = true
 	UiKit.pop_in(p, 0.0, 24.0)
+
+
+func _input(event: InputEvent) -> void:
+	if not visible or not is_inside_tree() or get_child_count() > 0 and get_children().any(func(c): return c is SettingsPanel):
+		return
+	if event.is_action_pressed("pause") and "resume" in _ids:
+		get_viewport().set_input_as_handled()
+		action.emit("resume")
+	elif event.is_action_pressed("confirm") and _ids.size() > 0:
+		get_viewport().set_input_as_handled()
+		action.emit(_ids[0])

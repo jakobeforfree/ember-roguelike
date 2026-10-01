@@ -20,6 +20,7 @@ var hp := 100.0
 var max_hp := 100.0
 var move_input := Vector2.ZERO     # set by controls each frame (x = right, y = down screen)
 var facing := Vector3.FORWARD
+var aim_dir := Vector3.ZERO        # mouse direction on PC; idle dodges go this way
 var dodge_cd_left := 0.0
 var invuln_left := 0.0             # post-hit grace period
 var iframe_left := 0.0             # dodge invincibility
@@ -93,7 +94,12 @@ func dodge_cooldown_ratio() -> float:
 func try_dodge() -> bool:
 	if not dodge_ready():
 		return false
-	dash_dir = input_dir().normalized() if move_input.length() > 0.1 else facing
+	if move_input.length() > 0.1:
+		dash_dir = input_dir().normalized()
+	elif aim_dir.length() > 0.1:
+		dash_dir = aim_dir
+	else:
+		dash_dir = facing
 	dash_left = DASH_TIME
 	iframe_left = stats.get_stat("iframe_time")
 	dodge_cd_left = stats.get_stat("dodge_cooldown")
@@ -217,6 +223,7 @@ func take_damage(amount: float, _source = null) -> void:
 		velocity = Vector3.ZERO
 		Fx.burst(get_parent(), global_position, Color("ff7a3d"), 1.3, 30)
 		model.visible = false
+		Events.screen_shake.emit(0.8)
 		died.emit()
 
 

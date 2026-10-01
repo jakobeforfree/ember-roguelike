@@ -13,7 +13,7 @@ const CODES := {
 	"emoji_events": 0xea23, "hiking": 0xe50a, "workspace_premium": 0xe7af, "sports_motorsports": 0xea2d,
 	"dangerous": 0xe99a, "blur_on": 0xe3a5, "open_in_full": 0xf1ce, "air": 0xefd8, "arrow_forward": 0xe5c8,
 	"replay": 0xe042, "home": 0xe88a, "toll": 0xe8e0, "upgrade": 0xf0fb, "timer": 0xe425, "castle": 0xeab1,
-	"add": 0xe145, "check": 0xe5ca,
+	"add": 0xe145, "check": 0xe5ca, "settings": 0xe8b8, "sports_esports": 0xea28,
 }
 
 

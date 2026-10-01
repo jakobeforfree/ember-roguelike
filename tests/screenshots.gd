@@ -65,4 +65,10 @@ func _ready() -> void:
 			took_boss = true
 			await shot("04_boss")
 			break
+	run._open_pause()
+	await get_tree().create_timer(0.5, true, false, true).timeout
+	await shot("05_pause")
+	run._on_modal_action("settings")
+	await get_tree().create_timer(0.5, true, false, true).timeout
+	await shot("06_settings")
 	get_tree().quit()

@@ -65,6 +65,9 @@ func _build_top_bar() -> void:
 	_gold = UiKit.chip_label(gold)
 	_gold.visible = true
 	right.add_child(gold)
+	var gear := UiKit.button("", "secondary", 18, Vector2(40, 40), "settings")
+	gear.pressed.connect(open_settings)
+	right.add_child(gear)
 
 
 func _build_left() -> void:
@@ -129,16 +132,25 @@ func _build_bottom() -> void:
 	box.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	box.offset_left = -170
 	box.offset_right = 170
-	box.offset_top = -132
+	box.offset_top = -138
 	box.offset_bottom = -28
 	box.add_theme_constant_override("separation", 6)
 	add_child(box)
 	var start := UiKit.button("START RUN", "primary", 26, Vector2(340, 76), "play_arrow")
 	start.pressed.connect(func(): start_run.emit())
 	box.add_child(start)
-	var dev := UiKit.button("Dev: grant random gear", "ghost", 13, Vector2(0, 28))
+	var hint := UiKit.hint_row([["ENTER", "Start"], ["WASD", "Move"], [Controls.key_label("dodge"), "Dodge"]])
+	hint.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_child(hint)
+	# Dev helper sits in the corner, out of the way of the main flow.
+	var dev := UiKit.button("Dev: +gear", "ghost", 12, Vector2(0, 26))
+	dev.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	dev.offset_left = 34
+	dev.offset_right = 140
+	dev.offset_top = -24
+	dev.offset_bottom = -1
 	dev.pressed.connect(_dev_grant)
-	box.add_child(dev)
+	add_child(dev)
 
 
 func _section_title(text: String, icon_name: String) -> HBoxContainer:
@@ -319,6 +331,19 @@ func _show_detail(it: GearItem) -> void:
 		var sv := UiKit.button("+%d" % Profile.salvage_value(it), "gold", 16, Vector2(110, 44), "toll")
 		sv.pressed.connect(func(): Profile.salvage(it.uid); Profile.save_profile())
 		row.add_child(sv)
+
+
+func open_settings() -> void:
+	if find_children("*", "SettingsPanel", false, false).is_empty():
+		add_child(SettingsPanel.new())
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not is_visible_in_tree() or not find_children("*", "SettingsPanel", false, false).is_empty():
+		return
+	if event.is_action_pressed("confirm"):
+		get_viewport().set_input_as_handled()
+		start_run.emit()
 
 
 func _dev_grant() -> void:

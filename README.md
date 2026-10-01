@@ -16,13 +16,20 @@ native mobile export and performance harder.
 1. Install [Godot 4.3+](https://godotengine.org/download) (standard build, not .NET).
 2. Open `project.godot`, then press **F5**.
 
-| Action | Touch | Desktop |
-|---|---|---|
-| Move | Drag anywhere on the left half (floating stick) | WASD / arrows, or drag with the mouse |
-| Dodge | Big **DODGE** button, bottom right | Space / Shift / K |
-| Pause | `II` top left | Esc |
+Play in the browser: **https://ember-roguelike.vercel.app**. It's built PC-first (keyboard + mouse or gamepad);
+touch controls appear automatically if you touch the screen.
 
-The mouse acts as a touch (`emulate_touch_from_mouse`), so you can test the touch controls on desktop.
+| Action | Keyboard / mouse | Gamepad | Touch |
+|---|---|---|---|
+| Move | WASD / arrows | Left stick / D-pad | Left-half floating stick |
+| Dodge | Space / Shift (standing still: toward the mouse cursor) | A / RB | DODGE button |
+| Attack | Automatic, nearest visible enemy | | |
+| Pick upgrade | 1 / 2 / 3, or arrows + Enter, or click | D-pad + A | Tap |
+| Pause | Esc / P | Start | `II` button |
+| Start run | Enter | A | Tap |
+
+Settings (fullscreen, screen shake, damage numbers) are in the gear menu at camp and in the pause menu,
+and are saved to `user://settings.cfg`.
 
 ## What's in the MVP
 - **Player**: the Ember Wanderer, who moves freely and shoots the nearest visible enemy in range
@@ -58,7 +65,8 @@ The mouse acts as a touch (`emulate_touch_from_mouse`), so you can test the touc
 ## Code layout
 ```
 scripts/
-  autoload/   events.gd (signal bus), profile.gd (persistent save)
+  autoload/   events.gd (signal bus), profile.gd (persistent save), controls.gd (input actions,
+              keyboard/gamepad/touch mode), settings.gd (player preferences)
   core/       stats.gd (modifier-based stats), stat_builder.gd, run_state.gd, flat.gd (XZ-plane helpers)
   visual/     models, materials, icons, world_kit (lighting/post)
   data/       rarity, gear_db, gear_item, loot_generator, weapon_db,
@@ -110,8 +118,13 @@ godot --headless --fixed-fps 60 res://tests/test_runner.tscn   # exit code 0 = p
 `bash tools/build_web.sh` downloads Godot plus only the Web export template (~17 MB, taken from the
 1 GB template archive with HTTP range requests), then exports to `build/web`. `vercel.json` runs the
 same script, so a Vercel project connected to this repo rebuilds on every push. It uses the
-no-threads web build, so no special COOP/COEP headers are needed. It also installs as a
-full-screen landscape web app (PWA) from "Add to Home Screen".
+no-threads web build, so no special COOP/COEP headers are needed. The offline-app (PWA) service worker
+is off on purpose, so browsers always load the newest build after a deploy.
+
+## Toward Steam
+The game is PC-first now: rebindable input actions (`Controls`), gamepad support (Steam Deck), a 16:9
+desktop window with fullscreen, and a settings file. Still needed for a Steam build: Windows/Linux export
+presets, audio, GodotSteam (achievements, cloud saves via `Profile.to_dict()`), and store assets.
 
 ## Exporting to Android / iOS
 1. In Godot: **Editor → Manage Export Templates → Download**.

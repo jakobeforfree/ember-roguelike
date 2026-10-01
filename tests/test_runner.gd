@@ -17,6 +17,7 @@ func check(cond: bool, msg: String) -> void:
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	Profile.save_path = "user://test_profile.json"
+	Settings.path = "user://test_settings.cfg"
 	for m in get_method_list():
 		var n: String = m["name"]
 		if n.begins_with("test_"):
@@ -121,6 +122,46 @@ func test_run_progression() -> void:
 func _frames(n: int) -> void:
 	for i in n:
 		await get_tree().physics_frame
+
+
+func test_pc_controls() -> void:
+	for a in ["move_left", "move_right", "move_up", "move_down", "dodge", "pause", "confirm", "pick_1", "pick_3"]:
+		check(InputMap.has_action(a), "action %s registered" % a)
+	check(Controls.key_label("dodge") == "SPACE", "dodge shows SPACE keycap (got %s)" % Controls.key_label("dodge"))
+	Input.action_press("move_right")
+	Input.action_press("move_up")
+	var v := Controls.move_vector()
+	check(v.x > 0.6 and v.y < -0.6, "WASD produces a diagonal move vector %s" % v)
+	Input.action_release("move_right")
+	Input.action_release("move_up")
+	check(Controls.move_vector() == Vector2.ZERO, "released keys stop movement")
+	var ev := InputEventJoypadButton.new()
+	ev.button_index = JOY_BUTTON_A
+	ev.pressed = true
+	check(ev.is_action("dodge"), "gamepad A dodges")
+
+
+func test_idle_dodge_follows_mouse_aim() -> void:
+	var arena := _make_arena()
+	var room: Room = arena[0]
+	var p: Player = arena[1]
+	p.move_input = Vector2.ZERO
+	p.aim_dir = Vector3(-1, 0, 0)
+	p.try_dodge()
+	check(p.dash_dir.is_equal_approx(Vector3(-1, 0, 0)), "standing still dodges toward the cursor")
+	Engine.time_scale = 1.0
+	room.queue_free()
+
+
+func test_settings_persist() -> void:
+	Settings.set_value("screen_shake", false)
+	Settings.set_value("damage_numbers", false)
+	Settings.screen_shake = true
+	Settings.damage_numbers = true
+	Settings.load_settings()
+	check(not Settings.screen_shake and not Settings.damage_numbers, "settings survive reload")
+	Settings.set_value("screen_shake", true)
+	Settings.set_value("damage_numbers", true)
 
 
 func test_telegraph_shapes() -> void:

@@ -60,6 +60,7 @@ func _think(delta: float) -> void:
 				_hit_player = true
 				player.take_damage(damage * 1.4, self)
 			if _dashed >= _dash_len or get_slide_collision_count() > 0:
+				Events.screen_shake.emit(0.5)
 				Fx.ring(get_parent(), global_position, color, 3.5, 0.35)
 				Fx.burst(get_parent(), global_position, Color("a8a29e"), 1.4, 24)
 				set_state("recover")
@@ -109,6 +110,7 @@ func _on_meteor(tg: Telegraph) -> void:
 	if dead:
 		return
 	resolve_hit(tg, damage)
+	Events.screen_shake.emit(0.3)
 	Fx.ring(get_parent(), tg.global_position, Color("ff7a2f"), 2.8, 0.3)
 	Fx.burst(get_parent(), tg.global_position, Color("ff9a3d"), 1.2, 20)
 

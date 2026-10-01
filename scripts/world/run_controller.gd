@@ -19,6 +19,8 @@ var upgrade_panel: UpgradePanel
 var modal: MessagePanel
 var input_enabled := true   # false = something else (tests, replays, autoplay) drives the player
 var _ending := false
+var _trauma := 0.0
+var _ui_root: Control
 
 
 func start(seed_value: int = -1) -> void:
@@ -39,6 +41,7 @@ func start(seed_value: int = -1) -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.theme = UiKit.theme()
 	ui.add_child(root)
+	_ui_root = root
 	hud = Hud.new()
 	hud.camera = camera
 	root.add_child(hud)
@@ -57,7 +60,7 @@ func start(seed_value: int = -1) -> void:
 	player.setup(_build_stats(), StatBuilder.weapon_id_for(run.character_id, Profile.equipped_items()))
 	player.hp_changed.connect(hud.set_hp)
 	player.died.connect(_on_player_died)
-	player.dodged.connect(func(perfect): if perfect: hud.dodge.flash_perfect())
+	player.dodged.connect(func(perfect): if perfect: hud.flash_perfect())
 	hud.set_hp(player.hp, player.max_hp)
 	_load_room()
 	# Every run starts with one free pick so builds diverge immediately.
@@ -111,13 +114,14 @@ func _update_room_label() -> void:
 	hud.set_gold(run.gold)
 
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	if player == null:
 		return
 	if input_enabled:
 		player.move_input = _read_move_input()
-	hud.dodge.cooldown_ratio = player.dodge_cooldown_ratio()
-	hud.dodge.cooldown_left = player.dodge_cd_left
+		player.aim_dir = Vector3.ZERO if Controls.touch_mode else _mouse_aim()
+	hud.set_dodge_cooldown(player.dodge_cooldown_ratio(), player.dodge_cd_left)
+	_trauma = maxf(0.0, _trauma - delta * 1.8)
 	if room and room.boss and is_instance_valid(room.boss):
 		hud.set_boss(room.boss)
 	_update_camera(0.12)
@@ -125,21 +129,33 @@ func _physics_process(_delta: float) -> void:
 
 
 func _read_move_input() -> Vector2:
-	var v := hud.joystick.output
-	var k := Vector2(
-		float(Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT)) - float(Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT)),
-		float(Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN)) - float(Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP)))
-	if k != Vector2.ZERO:
-		v = k.normalized()
-	return v
+	if hud.joystick.is_active():
+		return hud.joystick.output
+	return Controls.move_vector()
+
+
+## Ground-plane direction from the player to the mouse cursor.
+func _mouse_aim() -> Vector3:
+	var mp := get_viewport().get_mouse_position()
+	var from := camera.project_ray_origin(mp)
+	var dir := camera.project_ray_normal(mp)
+	if absf(dir.y) < 0.001:
+		return Vector3.ZERO
+	var hit := from + dir * (-from.y / dir.y)
+	var v := hit - player.global_position
+	v.y = 0.0
+	return v.normalized() if v.length() > 0.5 else Vector3.ZERO
+
+
+func shake(amount: float) -> void:
+	_trauma = minf(1.0, _trauma + amount)
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo:
-		if event.physical_keycode in [KEY_SPACE, KEY_SHIFT, KEY_K]:
-			_on_dodge_pressed()
-		elif event.physical_keycode == KEY_ESCAPE:
-			_open_pause()
+	if event.is_action_pressed("dodge"):
+		_on_dodge_pressed()
+	elif event.is_action_pressed("pause"):
+		_open_pause()
 
 
 ## Follows the player, kept inside the arena so walls frame the view.
@@ -154,6 +170,13 @@ func _update_camera(weight: float) -> void:
 	var desired := Flat.v3(target) + CAM_OFFSET
 	camera.position = camera.position.lerp(desired, weight)
 	camera.look_at(camera.position - CAM_OFFSET, Vector3.UP)
+	if _trauma > 0.0 and Settings.screen_shake:
+		var k := _trauma * _trauma * 0.45
+		camera.h_offset = randf_range(-1.0, 1.0) * k
+		camera.v_offset = randf_range(-1.0, 1.0) * k
+	else:
+		camera.h_offset = 0.0
+		camera.v_offset = 0.0
 
 
 func _on_dodge_pressed() -> void:
@@ -252,6 +275,8 @@ func _on_exit_reached() -> void:
 
 func _ready() -> void:
 	Events.enemy_killed.connect(_on_enemy_killed)
+	Events.screen_shake.connect(shake)
+	Events.player_damaged.connect(func(_a): shake(0.45))
 
 
 func _on_enemy_killed(id: String, _pos: Vector3) -> void:
@@ -297,7 +322,7 @@ func _open_pause() -> void:
 	for id in run.upgrades:
 		ups.append("%s ×%d" % [UpgradeDB.get_def(id)["name"], run.upgrades[id]])
 	var lines := ["Stage %d · Room %d" % [run.stage, run.room_index + 1], ", ".join(ups) if ups.size() > 0 else "No boons yet"]
-	modal.open("PAUSED", UiKit.ACCENT, "pause", lines, [["resume", "Resume", "primary", "play_arrow"], ["retreat", "Retreat to Camp", "secondary", "home"]])
+	modal.open("PAUSED", UiKit.ACCENT, "pause", lines, [["resume", "Resume", "primary", "play_arrow"], ["settings", "Settings", "secondary", "settings"], ["retreat", "Retreat to Camp", "secondary", "home"]])
 
 
 func _finish_run() -> void:
@@ -313,6 +338,8 @@ func _on_modal_action(id: String) -> void:
 		"resume":
 			modal.visible = false
 			get_tree().paused = false
+		"settings":
+			modal.add_child(SettingsPanel.new())
 		"retreat":
 			_finish_run()
 			_exit_to_camp()

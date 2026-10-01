@@ -7,6 +7,7 @@ signal chosen(id: String)
 var choices: Array = []
 var _cards: Array = []
 var _locked := false
+var _focus := -1
 
 
 func open(p_choices: Array, taken: Dictionary, title: String = "Choose a Boon", subtitle: String = "") -> void:
@@ -40,22 +41,66 @@ func open(p_choices: Array, taken: Dictionary, title: String = "Choose a Boon", 
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 22)
 	v.add_child(row)
+	_focus = -1
 	for i in choices.size():
-		var card := _card(choices[i], taken.get(choices[i], 0))
+		var card := _card(choices[i], taken.get(choices[i], 0), i)
 		row.add_child(card)
 		_cards.append(card)
 		UiKit.pop_in(card, 0.08 + i * 0.07, 40.0)
+	if not Controls.touch_mode:
+		var hint := UiKit.hint_row([["1 2 3", "Pick"], ["← →", "Select"], ["ENTER", "Confirm"]])
+		hint.alignment = BoxContainer.ALIGNMENT_CENTER
+		var gap := Control.new()
+		gap.custom_minimum_size.y = 18
+		v.add_child(gap)
+		v.add_child(hint)
 	visible = true
 
 
-func _card(id: String, stacks: int) -> Button:
+func _input(event: InputEvent) -> void:
+	if not visible or _locked or choices.is_empty():
+		return
+	for i in choices.size():
+		if event.is_action_pressed("pick_%d" % (i + 1)):
+			get_viewport().set_input_as_handled()
+			pick(choices[i])
+			return
+	if event.is_action_pressed("nav_left"):
+		_set_focus(maxi(0, _focus - 1) if _focus >= 0 else 0)
+	elif event.is_action_pressed("nav_right"):
+		_set_focus(mini(choices.size() - 1, _focus + 1))
+	elif event.is_action_pressed("confirm") and _focus >= 0:
+		get_viewport().set_input_as_handled()
+		pick(choices[_focus])
+
+
+func _set_focus(i: int) -> void:
+	_focus = i
+	for j in _cards.size():
+		var card: Button = _cards[j]
+		var on := j == i
+		card.add_theme_stylebox_override("normal", card.get_meta("hover_sb") if on else card.get_meta("normal_sb"))
+		card.pivot_offset = card.size * 0.5
+		card.create_tween().tween_property(card, "scale", Vector2.ONE * (1.04 if on else 1.0), 0.12)
+
+
+func _card(id: String, stacks: int, index: int = 0) -> Button:
 	var def := UpgradeDB.get_def(id)
 	var col: Color = UpgradeDB.CATEGORY_COLORS[def["cat"]]
 	var b := Button.new()
 	b.custom_minimum_size = Vector2(264, 340)
 	b.focus_mode = Control.FOCUS_NONE
-	b.add_theme_stylebox_override("normal", UiKit.box(UiKit.SURFACE_2, 24, Color(col, 0.35), 2))
-	b.add_theme_stylebox_override("hover", UiKit.box(UiKit.SURFACE_2.lightened(0.05), 24, Color(col, 0.8), 2))
+	var normal_sb := UiKit.box(UiKit.SURFACE_2, 24, Color(col, 0.35), 2)
+	var hover_sb := UiKit.box(UiKit.SURFACE_2.lightened(0.05), 24, Color(col, 0.9), 3)
+	b.set_meta("normal_sb", normal_sb)
+	b.set_meta("hover_sb", hover_sb)
+	b.add_theme_stylebox_override("normal", normal_sb)
+	b.add_theme_stylebox_override("hover", hover_sb)
+	b.mouse_entered.connect(func(): _set_focus(index))
+	if not Controls.touch_mode:
+		var kc := UiKit.keycap(str(index + 1))
+		kc.position = Vector2(16, 14)
+		b.add_child(kc)
 	b.add_theme_stylebox_override("pressed", UiKit.box(Color(col, 0.2), 24, col, 3))
 	b.pressed.connect(func(): pick(id))
 	UiKit.press_feedback(b)

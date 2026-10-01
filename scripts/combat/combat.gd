@@ -67,6 +67,7 @@ static func chain_lightning(player, from_enemy, amount: float, jumps: int) -> vo
 
 static func explode(player, pos: Vector3, amount: float) -> void:
 	var tree: SceneTree = player.get_tree()
+	Events.screen_shake.emit(0.12)
 	Fx.ring(player.get_parent(), pos, Color("ff9f43"), EXPLODE_RADIUS, 0.3)
 	Fx.burst(player.get_parent(), pos, Color("ffb347"), 1.0, 14)
 	for e in tree.get_nodes_in_group("enemies"):

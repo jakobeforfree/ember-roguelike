@@ -20,6 +20,9 @@ var toast: Label
 var toast_sub: Label
 var _toast_box: VBoxContainer
 var _bars: Control
+var action_bar: HBoxContainer
+var dodge_slot: AbilitySlot
+var hints: Control
 var _toast_tw: Tween
 
 
@@ -46,6 +49,31 @@ func _ready() -> void:
 	dodge.offset_right = -44
 	dodge.offset_bottom = -44
 	add_child(dodge)
+
+	# PC action bar (bottom center) + key hints (bottom left)
+	action_bar = HBoxContainer.new()
+	action_bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	action_bar.offset_left = -90
+	action_bar.offset_right = 90
+	action_bar.offset_top = -124
+	action_bar.offset_bottom = -20
+	action_bar.alignment = BoxContainer.ALIGNMENT_CENTER
+	action_bar.add_theme_constant_override("separation", 12)
+	add_child(action_bar)
+	dodge_slot = AbilitySlot.new()
+	dodge_slot.key_text = Controls.key_label("dodge")
+	action_bar.add_child(dodge_slot)
+	var ability := AbilitySlot.new()
+	ability.locked = true
+	ability.key_text = "Q"
+	action_bar.add_child(ability)
+	hints = UiKit.hint_row([["WASD", "Move"], [Controls.key_label("dodge"), "Dodge"], ["ESC", "Pause"]])
+	hints.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	hints.offset_left = 28
+	hints.offset_top = -52
+	hints.offset_bottom = -24
+	hints.modulate.a = 0.8
+	add_child(hints)
 
 	# Top-left: portrait + health + upgrades
 	var tl := HBoxContainer.new()
@@ -81,11 +109,10 @@ func _ready() -> void:
 
 	# Boss bar
 	boss_box = VBoxContainer.new()
-	boss_box.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	boss_box.anchor_left = 0.5
+	boss_box.anchor_right = 0.5
 	boss_box.offset_left = -230
 	boss_box.offset_right = 230
-	boss_box.offset_top = -78
-	boss_box.offset_bottom = -30
 	boss_box.add_theme_constant_override("separation", 6)
 	boss_box.visible = false
 	add_child(boss_box)
@@ -137,6 +164,39 @@ func _ready() -> void:
 	toast_sub = UiKit.label("", 18, UiKit.MUTED, 600, 2)
 	toast_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_toast_box.add_child(toast_sub)
+
+	Controls.mode_changed.connect(_apply_mode)
+	_apply_mode(Controls.touch_mode)
+
+
+## PC: action bar + key hints, boss bar on top. Touch: thumb controls, boss bar at the bottom.
+func _apply_mode(touch: bool) -> void:
+	joystick.visible = touch
+	dodge.visible = touch
+	action_bar.visible = not touch
+	hints.visible = not touch
+	if touch:
+		boss_box.anchor_top = 1.0
+		boss_box.anchor_bottom = 1.0
+		boss_box.offset_top = -78
+		boss_box.offset_bottom = -30
+	else:
+		boss_box.anchor_top = 0.0
+		boss_box.anchor_bottom = 0.0
+		boss_box.offset_top = 86
+		boss_box.offset_bottom = 134
+
+
+func set_dodge_cooldown(ratio: float, left: float) -> void:
+	dodge.cooldown_ratio = ratio
+	dodge.cooldown_left = left
+	dodge_slot.cooldown_ratio = ratio
+	dodge_slot.cooldown_left = left
+
+
+func flash_perfect() -> void:
+	dodge.flash_perfect()
+	dodge_slot.flash_perfect()
 
 
 func hide_message() -> void:

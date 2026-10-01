@@ -229,7 +229,8 @@ func take_damage(amount: float, crit: bool = false, text_color: Color = Color.WH
 	hp -= amount
 	_flash = 0.08
 	var c := Color("fde047") if crit else text_color
-	Fx.text(get_parent(), global_position + Vector3(0, bar_height - 1.6, 0), str(roundi(amount)) + ("!" if crit else ""), c, 64 if crit else 44)
+	if Settings.damage_numbers:
+		Fx.text(get_parent(), global_position + Vector3(0, bar_height - 1.6, 0), str(roundi(amount)) + ("!" if crit else ""), c, 64 if crit else 44)
 	if hp <= 0.0:
 		die()
 

@@ -195,3 +195,42 @@ static func pop_in(c: CanvasItem, delay: float = 0.0, _offset: float = 0.0) -> v
 		tw.parallel().tween_property(c, "modulate:a", 1.0, 0.22)
 	else:
 		tw.tween_property(c, "modulate:a", 1.0, 0.22)
+
+
+## Draws a keyboard keycap centered at `center` (for custom-drawn controls).
+static func draw_keycap(ci: CanvasItem, center: Vector2, text: String, alpha: float = 1.0) -> void:
+	var f := font(800, 1)
+	var fs := 12
+	var w := maxf(f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 14.0, 24.0)
+	var r := Rect2(center - Vector2(w * 0.5, 11), Vector2(w, 22))
+	ci.draw_style_box(box(Color(1, 1, 1, 0.1 * alpha), 6, Color(1, 1, 1, 0.25 * alpha), 1, 0), r)
+	ci.draw_rect(Rect2(r.position + Vector2(2, r.size.y - 2), Vector2(r.size.x - 4, 2)), Color(0, 0, 0, 0.35 * alpha))
+	ci.draw_string(f, Vector2(r.position.x + (w - f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x) * 0.5, center.y + 4.5), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, 0.9 * alpha))
+
+
+## Keycap as a Control (for layouts): [KEY]
+static func keycap(text: String) -> PanelContainer:
+	var p := PanelContainer.new()
+	var sb := box(Color(1, 1, 1, 0.1), 6, Color(1, 1, 1, 0.25), 1, 0)
+	sb.content_margin_left = 7
+	sb.content_margin_right = 7
+	sb.content_margin_top = 1
+	sb.content_margin_bottom = 2
+	p.add_theme_stylebox_override("panel", sb)
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(label(text, 12, Color(1, 1, 1, 0.9), 800, 1))
+	return p
+
+
+## A row of "[KEY] action" hints, e.g. hint_row([["WASD", "Move"], ["SPACE", "Dodge"]]).
+static func hint_row(pairs: Array, size: int = 13) -> HBoxContainer:
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 14)
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for pair in pairs:
+		var item := HBoxContainer.new()
+		item.add_theme_constant_override("separation", 6)
+		item.add_child(keycap(pair[0]))
+		item.add_child(label(pair[1], size, MUTED, 600))
+		h.add_child(item)
+	return h

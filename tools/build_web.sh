@@ -21,4 +21,5 @@ rm -rf build/web && mkdir -p build/web
 "$GODOT" --headless --import >/dev/null 2>&1 || true
 "$GODOT" --headless --export-release "Web" build/web/index.html
 test -s build/web/index.wasm && test -s build/web/index.pck
+cp tools/web_extra/* build/web/
 echo "Web build ready: build/web"

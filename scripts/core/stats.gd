@@ -35,12 +35,15 @@ const DEFAULTS := {
 	"explode_chance": 0.0,
 	"heal_on_clear": 0.0,       # fraction of max hp healed after a room
 	"gold_find": 0.0,
+	"ability_cooldown": 8.0,    # Ember Burst (Q)
+	"ability_power": 1.0,
 }
 
 const LIMITS := {
 	"crit_chance": Vector2(0.0, 1.0),
 	"damage_reduction": Vector2(0.0, 0.7),
 	"dodge_cooldown": Vector2(0.3, 10.0),
+	"ability_cooldown": Vector2(2.0, 30.0),
 	"attack_speed": Vector2(0.2, 12.0),
 	"burn_chance": Vector2(0.0, 1.0),
 	"slow_chance": Vector2(0.0, 1.0),

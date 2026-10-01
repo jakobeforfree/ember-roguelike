@@ -40,7 +40,7 @@ func step() -> void:
 				return
 			move += away.normalized() * 2.0
 	# 2. Loot, then the gate.
-	var loot := room.entities.get_children().filter(func(n): return n is LootPickup)
+	var loot := room.entities.get_children().filter(func(n): return n is LootPickup or n is LorePickup)
 	if not loot.is_empty():
 		move += (_waypoint(room, here, Flat.xz(loot[0].global_position), p.radius) - here).normalized()
 	elif room.door_open:

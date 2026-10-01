@@ -201,6 +201,31 @@ static func weapon(id: String) -> Node3D:
 	return root
 
 
+## Camp prop: the Wanderer's journal, open on a stump by candlelight.
+static func journal() -> Node3D:
+	var root := Node3D.new()
+	part(root, cyl(0.36, 0.4, 0.45, 10), Mats.solid(Color("5b3a1e"), 0.9), Vector3(0, 0.22, 0))
+	part(root, cyl(0.3, 0.3, 0.02, 10), Mats.solid(Color("a07444"), 0.8), Vector3(0, 0.455, 0))
+	var book := Node3D.new()
+	book.name = "Book"
+	book.position = Vector3(-0.02, 0.48, 0.02)
+	book.rotation_degrees.y = -15
+	root.add_child(book)
+	part(book, box(Vector3(0.5, 0.025, 0.36)), Mats.solid(Color("7f1d1d"), 0.7), Vector3(0, 0, 0))
+	part(book, box(Vector3(0.22, 0.03, 0.32)), Mats.solid(Color("f3e6c8"), 0.9), Vector3(-0.12, 0.025, 0), Vector3(0, 0, 6))
+	part(book, box(Vector3(0.22, 0.03, 0.32)), Mats.solid(Color("f3e6c8"), 0.9), Vector3(0.12, 0.025, 0), Vector3(0, 0, -6))
+	part(book, box(Vector3(0.12, 0.005, 0.18)), Mats.glow(Color("ffcf7a"), 1.2), Vector3(0.12, 0.045, 0), Vector3(0, 0, -6))
+	part(root, cyl(0.035, 0.035, 0.16, 8), Mats.solid(Color("f5f0e1"), 0.6), Vector3(0.2, 0.54, -0.18))
+	part(root, sphere(0.03, 6, 3), Mats.glow(Color("ffb347"), 5.0), Vector3(0.2, 0.64, -0.18))
+	var light := OmniLight3D.new()
+	light.light_color = Color("ffb347")
+	light.light_energy = 0.7
+	light.omni_range = 2.0
+	light.position = Vector3(0.2, 0.75, -0.18)
+	root.add_child(light)
+	return root
+
+
 ## Camp prop: the wizard's pack with bedroll and a little lantern.
 static func backpack() -> Node3D:
 	var root := Node3D.new()
@@ -344,15 +369,15 @@ static func loot(color: Color) -> Node3D:
 	return root
 
 
-static func brazier(parent: Node3D, pos: Vector3) -> OmniLight3D:
+static func brazier(parent: Node3D, pos: Vector3, flame := Color("ff7a1a")) -> OmniLight3D:
 	var root := Node3D.new()
 	root.position = pos
 	parent.add_child(root)
 	part(root, cyl(0.32, 0.2, 0.25, 8), Mats.solid(Color("44403c"), 0.4, 0.6), Vector3(0, 0, 0))
-	part(root, cyl(0.0, 0.22, 0.55, 6), Mats.glow(Color("ff7a1a"), 3.0), Vector3(0, 0.38, 0))
-	part(root, cyl(0.0, 0.12, 0.4, 6), Mats.glow(Color("ffd36b"), 4.0), Vector3(0, 0.36, 0))
+	part(root, cyl(0.0, 0.22, 0.55, 6), Mats.glow(flame, 3.0), Vector3(0, 0.38, 0))
+	part(root, cyl(0.0, 0.12, 0.4, 6), Mats.glow(flame.lightened(0.5), 4.0), Vector3(0, 0.36, 0))
 	var light := OmniLight3D.new()
-	light.light_color = Color("ff9a4d")
+	light.light_color = flame.lightened(0.15)
 	light.light_energy = 1.6
 	light.omni_range = 8.0
 	light.omni_attenuation = 1.2

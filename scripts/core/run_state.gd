@@ -21,6 +21,14 @@ func _init(seed_value: int = -1) -> void:
 		rng.randomize()
 
 
+func world() -> Dictionary:
+	return WorldDB.for_stage(stage)
+
+
+func ascension() -> int:
+	return WorldDB.ascension_for_stage(stage)
+
+
 func is_boss_room() -> bool:
 	return room_index == ROOMS_PER_STAGE - 1
 

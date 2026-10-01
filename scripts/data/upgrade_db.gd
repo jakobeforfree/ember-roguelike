@@ -43,8 +43,12 @@ const UPGRADES := {
 		"mods": [["dodge_cooldown", "pct", -0.18]]},
 	"stride": {"name": "Long Stride", "cat": "mobility", "icon": "open_in_full", "desc": "+30% dodge distance, longer invincibility", "max": 2,
 		"mods": [["dodge_distance", "pct", 0.3], ["iframe_time", "flat", 0.08]]},
+	"stoke": {"name": "Stoked Flame", "cat": "mobility", "icon": "timer", "desc": "Ember Burst (Q) recharges 22% faster", "max": 3,
+		"mods": [["ability_cooldown", "pct", -0.22]]},
 	"phantom": {"name": "Phantom Edge", "cat": "mobility", "icon": "blur_on", "desc": "Dodging through enemies deals 25 damage", "max": 3,
 		"mods": [["dash_damage", "flat", 25.0]]},
+	"wildfire": {"name": "Wildfire", "cat": "offense", "icon": "whatshot", "desc": "Ember Burst (Q) hits 40% harder and wider", "max": 3,
+		"mods": [["ability_power", "flat", 0.4]]},
 	# --- Elemental
 	"venom": {"name": "Venom Tips", "cat": "elemental", "icon": "water_drop", "desc": "Hits poison for 4 dmg/s (stacks)", "max": 3,
 		"mods": [["poison_dps", "flat", 4.0]]},

@@ -8,10 +8,14 @@ signal pause_pressed
 var camera: Camera3D
 var joystick: VirtualJoystick
 var dodge: DodgeButton
+var burst: DodgeButton
+var burst_slot: AbilitySlot
 var hp_bar: Bar
 var boss_bar: Bar
 var boss_box: VBoxContainer
 var boss_chip: Control
+var boss_name: Label
+var world_label: Label
 var pips: RoomPips
 var wave_label: Label
 var gold_label: Label
@@ -49,6 +53,16 @@ func _ready() -> void:
 	dodge.offset_right = -44
 	dodge.offset_bottom = -44
 	add_child(dodge)
+	burst = DodgeButton.new()
+	burst.icon_name = "whatshot"
+	burst.caption = "BURST"
+	burst.color = UiKit.ACCENT
+	burst.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	burst.offset_left = -330
+	burst.offset_top = -170
+	burst.offset_right = -224
+	burst.offset_bottom = -64
+	add_child(burst)
 
 	# PC action bar (bottom center) + key hints (bottom left)
 	action_bar = HBoxContainer.new()
@@ -63,11 +77,12 @@ func _ready() -> void:
 	dodge_slot = AbilitySlot.new()
 	dodge_slot.key_text = Controls.key_label("dodge")
 	action_bar.add_child(dodge_slot)
-	var ability := AbilitySlot.new()
-	ability.locked = true
-	ability.key_text = "Q"
-	action_bar.add_child(ability)
-	hints = UiKit.hint_row([["WASD", "Move"], [Controls.key_label("dodge"), "Dodge"], ["ESC", "Pause"]])
+	burst_slot = AbilitySlot.new()
+	burst_slot.icon_name = "whatshot"
+	burst_slot.color = UiKit.ACCENT
+	burst_slot.key_text = Controls.key_label("ability")
+	action_bar.add_child(burst_slot)
+	hints = UiKit.hint_row([["WASD", "Move"], [Controls.key_label("dodge"), "Dodge"], ["Q", "Ember Burst"], ["ESC", "Pause"]])
 	hints.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	hints.offset_left = 28
 	hints.offset_top = -52
@@ -97,9 +112,12 @@ func _ready() -> void:
 	tc.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	tc.offset_left = -160
 	tc.offset_right = 160
-	tc.offset_top = 18
+	tc.offset_top = 10
 	tc.add_theme_constant_override("separation", 2)
 	add_child(tc)
+	world_label = UiKit.label("", 12, UiKit.MUTED, 800, 3)
+	world_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tc.add_child(world_label)
 	pips = RoomPips.new()
 	pips.custom_minimum_size = Vector2(320, 34)
 	tc.add_child(pips)
@@ -120,7 +138,8 @@ func _ready() -> void:
 	bh.alignment = BoxContainer.ALIGNMENT_CENTER
 	bh.add_theme_constant_override("separation", 10)
 	boss_box.add_child(bh)
-	bh.add_child(UiKit.label("CINDER GOLEM", 16, Color("fdba74"), 800, 3))
+	boss_name = UiKit.label("GUARDIAN", 16, Color("fdba74"), 800, 3)
+	bh.add_child(boss_name)
 	boss_chip = UiKit.chip("ENRAGED", UiKit.DANGER, "", 12)
 	boss_chip.visible = false
 	bh.add_child(boss_chip)
@@ -173,6 +192,7 @@ func _ready() -> void:
 func _apply_mode(touch: bool) -> void:
 	joystick.visible = touch
 	dodge.visible = touch
+	burst.visible = touch
 	action_bar.visible = not touch
 	hints.visible = not touch
 	if touch:
@@ -183,8 +203,8 @@ func _apply_mode(touch: bool) -> void:
 	else:
 		boss_box.anchor_top = 0.0
 		boss_box.anchor_bottom = 0.0
-		boss_box.offset_top = 86
-		boss_box.offset_bottom = 134
+		boss_box.offset_top = 100
+		boss_box.offset_bottom = 148
 
 
 func set_dodge_cooldown(ratio: float, left: float) -> void:
@@ -192,6 +212,13 @@ func set_dodge_cooldown(ratio: float, left: float) -> void:
 	dodge.cooldown_left = left
 	dodge_slot.cooldown_ratio = ratio
 	dodge_slot.cooldown_left = left
+
+
+func set_ability_cooldown(ratio: float, left: float) -> void:
+	burst.cooldown_ratio = ratio
+	burst.cooldown_left = left
+	burst_slot.cooldown_ratio = ratio
+	burst_slot.cooldown_left = left
 
 
 func flash_perfect() -> void:
@@ -232,6 +259,37 @@ func set_room(_stage: int, room: int, total: int, wave_text: String) -> void:
 	wave_label.text = wave_text
 
 
+## Small slide-in notice on the right (journal pages, etc.).
+func notify(icon_name: String, title: String, text: String, color: Color) -> void:
+	var p := UiKit.panel(UiKit.SURFACE_2, Color(color, 0.5), 1, 14, 12)
+	p.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	p.offset_left = -360
+	p.offset_right = -24
+	p.offset_top = 96
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 10)
+	p.add_child(h)
+	h.add_child(Badge.make(icon_name, color, 40))
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", -2)
+	h.add_child(v)
+	v.add_child(UiKit.label(title, 11, color, 800, 2))
+	v.add_child(UiKit.label(text, 16, Color.WHITE, 700))
+	add_child(p)
+	p.modulate.a = 0.0
+	var tw := p.create_tween()
+	tw.tween_property(p, "modulate:a", 1.0, 0.25)
+	tw.tween_interval(3.2)
+	tw.tween_property(p, "modulate:a", 0.0, 0.5)
+	tw.tween_callback(p.queue_free)
+
+
+func set_world(world: Dictionary, ascension: int) -> void:
+	world_label.text = String(world["name"]).to_upper() + ("  ·  ASCENSION %d" % ascension if ascension > 0 else "")
+	world_label.add_theme_color_override("font_color", Color(world["color"]).lightened(0.2))
+
+
 func set_gold(g: int) -> void:
 	gold_label.text = str(g)
 
@@ -251,6 +309,9 @@ func set_boss(enemy) -> void:
 	boss_box.visible = show
 	if show:
 		boss_bar.set_values(enemy.hp, enemy.max_hp)
+		if enemy.display_name != "":
+			boss_name.text = enemy.display_name
+			boss_name.add_theme_color_override("font_color", Color(enemy.color).lightened(0.35))
 		boss_chip.visible = enemy.hp < enemy.max_hp * 0.5
 
 

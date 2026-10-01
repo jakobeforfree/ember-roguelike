@@ -6,12 +6,14 @@ extends Node3D
 const INTERACTABLES := {
 	"fire": {"pos": Vector3(1.7, 0.6, -0.4), "radius": 1.0},
 	"pack": {"pos": Vector3(-1.75, 0.55, 0.55), "radius": 0.75},
+	"journal": {"pos": Vector3(2.15, 0.5, 2.0), "radius": 0.55},
 }
 
 var hero: Node3D
 var fire_light: OmniLight3D
 var camera: Camera3D
 var pack: Node3D
+var journal: Node3D
 var _fire_root: Node3D
 var _hover := ""
 var _t := 0.0
@@ -48,6 +50,10 @@ func _ready() -> void:
 	pack.position = Vector3(-1.75, 0, 0.55)
 	pack.rotation_degrees.y = 160
 	add_child(pack)
+
+	journal = Models.journal()
+	journal.position = Vector3(2.15, 0, 2.0)
+	add_child(journal)
 
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
@@ -111,11 +117,13 @@ func set_hover(id: String) -> void:
 	if id == _hover:
 		return
 	_hover = id
-	for n in [pack]:
+	for pair in [[pack, "pack"], [journal, "journal"]]:
+		var n: Node3D = pair[0]
+		var on: bool = id == pair[1]
 		for m in n.find_children("*", "MeshInstance3D", true, false):
-			m.material_overlay = Mats.overlay(Color(1, 0.85, 0.6, 0.18)) if id == "pack" else null
-	var tw := pack.create_tween()
-	tw.tween_property(pack, "scale", Vector3.ONE * (1.08 if id == "pack" else 1.0), 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			m.material_overlay = Mats.overlay(Color(1, 0.85, 0.6, 0.18)) if on else null
+		var tw := n.create_tween()
+		tw.tween_property(n, "scale", Vector3.ONE * (1.1 if on else 1.0), 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	var tf := _fire_root.create_tween()
 	tf.tween_property(_fire_root, "scale", Vector3.ONE * (1.12 if id == "fire" else 1.0), 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 

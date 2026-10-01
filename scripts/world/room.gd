@@ -28,6 +28,7 @@ var door_rect := Rect2()
 var door_open := false
 var layout_name := "open"
 var is_boss_room := false
+var world: Dictionary = WorldDB.WORLDS[0]
 var difficulty := 0.0
 var waves: Array = []
 var wave_index := -1
@@ -48,8 +49,10 @@ var _lights: Array = []
 var _t := 0.0
 
 
-func build(p_rng: RandomNumberGenerator, p_difficulty: float, boss_room: bool, room_index: int) -> void:
+func build(p_rng: RandomNumberGenerator, p_difficulty: float, boss_room: bool, room_index: int, p_world: Dictionary = {}) -> void:
 	rng = p_rng
+	if not p_world.is_empty():
+		world = p_world
 	difficulty = p_difficulty
 	is_boss_room = boss_room
 	if boss_room:
@@ -126,12 +129,27 @@ func _on_boss_summon(ids: Array, near: Vector3) -> void:
 func spawn_enemy(id: String, pos: Vector3) -> Enemy:
 	var e: Enemy = load(EnemyDB.get_def(id)["script"]).new()
 	e.setup(id, difficulty, self, player)
+	_apply_world(e)
 	e.position = pos
 	e.died.connect(_on_enemy_died)
 	alive.append(e)
 	entities.add_child(e)
 	enemy_spawned.emit(e)
 	return e
+
+
+## World flavor: tinted enemies; the boss takes the world guardian's name, color and toughness.
+func _apply_world(e: Enemy) -> void:
+	var tint: Dictionary = world.get("tint", {})
+	if tint.has(e.enemy_id):
+		e.color = tint[e.enemy_id]
+	if e.enemy_id == "boss":
+		var b: Dictionary = world["boss"]
+		e.color = b["color"]
+		e.display_name = b["name"]
+		e.max_hp *= b["hp"]
+		e.hp = e.max_hp
+		e.set("world_index", WorldDB.WORLDS.find(world))
 
 
 func _on_enemy_died(e: Enemy) -> void:
@@ -295,8 +313,9 @@ func _build_visuals() -> void:
 	var fm := ShaderMaterial.new()
 	fm.shader = FLOOR_SHADER
 	fm.set_shader_parameter("room_size", Vector2(w, d))
-	if is_boss_room:
-		fm.set_shader_parameter("base_color", Color(0.27, 0.19, 0.17))
+	var base: Color = world["floor"]
+	fm.set_shader_parameter("base_color", base.lightened(0.08) if is_boss_room else base)
+	fm.set_shader_parameter("mortar_color", world["mortar"])
 	floor_mi.material_override = fm
 	add_child(floor_mi)
 	# Outer darkness so the arena floats in the void
@@ -305,21 +324,22 @@ func _build_visuals() -> void:
 	op.size = Vector2(w + 80.0, d + 80.0)
 	outer.mesh = op
 	outer.position = Vector3(w * 0.5, -0.05, d * 0.5)
-	outer.material_override = Mats.solid(Color("07080c"), 1.0)
+	outer.material_override = Mats.solid(Color(world["bg"]).lightened(0.02), 1.0)
 	add_child(outer)
+	_build_decor()
+	WorldKit.weather(self, world["weather"], bounds)
 
-	var stone := Mats.solid(Color("2b2733"), 0.9)
-	var cap := Mats.solid(Color("3d3846"), 0.8)
+	var stone := Mats.solid(world["trim"], 0.9)
+	var cap := Mats.solid(Color(world["trim"]).lightened(0.12), 0.8)
+	var flame: Color = world["light"]
 	for o in obstacles:
 		var r: Rect2 = o
-		var h := 2.2
-		Models.part(self, Models.box(Vector3(r.size.x, h, r.size.y)), stone, Vector3(r.get_center().x, h * 0.5, r.get_center().y))
-		Models.part(self, Models.box(Vector3(r.size.x + 0.2, 0.25, r.size.y + 0.2)), cap, Vector3(r.get_center().x, h + 0.12, r.get_center().y))
+		_build_obstacle(r)
 		if r.size.x <= 2.0 and r.size.y <= 2.0 and _lights.size() < 6:
-			_lights.append(Models.brazier(self, Vector3(r.get_center().x, h + 0.25, r.get_center().y)))
+			_lights.append(Models.brazier(self, Vector3(r.get_center().x, 2.45, r.get_center().y), flame))
 	for c in [Vector2(1.2, 1.2), Vector2(w - 1.2, 1.2), Vector2(1.2, d - 1.2), Vector2(w - 1.2, d - 1.2)]:
 		Models.part(self, Models.box(Vector3(1.0, 1.4, 1.0)), stone, Vector3(c.x, 0.7, c.y))
-		_lights.append(Models.brazier(self, Vector3(c.x, 1.4, c.y)))
+		_lights.append(Models.brazier(self, Vector3(c.x, 1.4, c.y), flame))
 
 	# Gate in the north wall
 	var cx := w * 0.5
@@ -368,8 +388,8 @@ func _build_walls() -> void:
 		Rect2(-t, 0, t, d),                                   # west
 		Rect2(w, 0, t, d),                                    # east
 	]
-	var wall_mat := Mats.solid(Color("221f29"), 0.95)
-	var trim := Mats.solid(Color("3d3846"), 0.8)
+	var wall_mat := Mats.solid(world["wall"], 0.95)
+	var trim := Mats.solid(world["trim"], 0.8)
 	for r in rects:
 		_add_box(body, r, WALL_H)
 		Models.part(self, Models.box(Vector3(r.size.x, WALL_H, r.size.y)), wall_mat, Vector3(r.get_center().x, WALL_H * 0.5, r.get_center().y))
@@ -381,6 +401,70 @@ func _build_walls() -> void:
 	_gate_body.collision_layer = 1
 	add_child(_gate_body)
 	_add_box(_gate_body, Rect2(cx - DOOR_W * 0.5, -t, DOOR_W, t + 0.2), WALL_H)
+
+
+## Obstacles are styled per world: charred stumps, ice crystals, mossy ruins, obsidian.
+func _build_obstacle(r: Rect2) -> void:
+	var h := 2.2
+	var c := Vector3(r.get_center().x, 0, r.get_center().y)
+	var body_col: Color = world["obstacle_color"]
+	var accent: Color = world["accent"]
+	match world["obstacle"]:
+		"crystal":
+			Models.part(self, Models.box(Vector3(r.size.x, h * 0.55, r.size.y)), Mats.solid(body_col, 0.3, 0.2), c + Vector3(0, h * 0.275, 0))
+			var n := int(clampf(r.size.x * r.size.y / 1.5, 2, 9))
+			for i in n:
+				var off := Vector3(rng.randf_range(-0.4, 0.4) * r.size.x, 0, rng.randf_range(-0.4, 0.4) * r.size.y)
+				var ch := rng.randf_range(1.4, 2.6)
+				Models.part(self, Models.cyl(0.0, rng.randf_range(0.25, 0.45), ch, 5), Mats.glow(accent.darkened(0.2), 0.6), c + off + Vector3(0, h * 0.55 + ch * 0.4, 0), Vector3(rng.randf_range(-15, 15), rng.randf() * 90, rng.randf_range(-15, 15)))
+		"ruin":
+			Models.part(self, Models.box(Vector3(r.size.x, h * 0.8, r.size.y)), Mats.solid(body_col, 0.95), c + Vector3(0, h * 0.4, 0))
+			Models.part(self, Models.box(Vector3(r.size.x + 0.15, 0.22, r.size.y + 0.15)), Mats.solid(accent.darkened(0.72), 0.95), c + Vector3(0, h * 0.8 + 0.1, 0))
+			for i in 2:
+				var off := Vector3(rng.randf_range(-0.3, 0.3) * r.size.x, 0, rng.randf_range(-0.3, 0.3) * r.size.y)
+				Models.part(self, Models.cyl(0.22, 0.26, rng.randf_range(0.6, 1.4), 8), Mats.solid(body_col.lightened(0.1), 0.9), c + off + Vector3(0, h * 0.8 + 0.4, 0))
+		"obsidian":
+			Models.part(self, Models.box(Vector3(r.size.x, h, r.size.y)), Mats.solid(body_col, 0.15, 0.4), c + Vector3(0, h * 0.5, 0))
+			Models.part(self, Models.box(Vector3(r.size.x + 0.04, 0.05, r.size.y + 0.04)), Mats.glow(accent, 2.0), c + Vector3(0, h * 0.35, 0))
+			Models.part(self, Models.box(Vector3(r.size.x + 0.04, 0.05, r.size.y + 0.04)), Mats.glow(accent, 2.0), c + Vector3(0, h * 0.75, 0))
+		_:  # stump: charred wood with glowing cracks
+			Models.part(self, Models.box(Vector3(r.size.x, h * 0.7, r.size.y)), Mats.solid(body_col, 0.95), c + Vector3(0, h * 0.35, 0))
+			Models.part(self, Models.box(Vector3(r.size.x + 0.04, 0.03, r.size.y + 0.04)), Mats.glow(accent.darkened(0.3), 0.7), c + Vector3(0, h * 0.45, 0))
+			Models.part(self, Models.box(Vector3(r.size.x * 0.9, 0.2, r.size.y * 0.9)), Mats.solid(body_col.lightened(0.1), 0.9), c + Vector3(0, h * 0.7 + 0.12, 0))
+
+
+## Scenery outside the walls so each world reads as a place, not just a floor.
+func _build_decor() -> void:
+	var w := bounds.size.x
+	var d := bounds.size.y
+	var col: Color = world["obstacle_color"]
+	var accent: Color = world["accent"]
+	for i in 26:
+		var side := i % 4
+		var p: Vector2
+		match side:
+			0: p = Vector2(rng.randf_range(-6, w + 6), rng.randf_range(-7, -2.5))
+			1: p = Vector2(rng.randf_range(-6, w + 6), rng.randf_range(d + 2.5, d + 5))
+			2: p = Vector2(rng.randf_range(-7, -2.5), rng.randf_range(0, d))
+			_: p = Vector2(rng.randf_range(w + 2.5, w + 7), rng.randf_range(0, d))
+		if side == 0 and absf(p.x - w * 0.5) < 4.0:
+			continue  # keep the gate clear
+		var root := Node3D.new()
+		root.position = Flat.v3(p)
+		root.rotation.y = rng.randf() * TAU
+		root.scale = Vector3.ONE * rng.randf_range(0.8, 1.4)
+		add_child(root)
+		match world["obstacle"]:
+			"crystal":
+				Models.part(root, Models.cyl(0.0, 0.5, rng.randf_range(2.0, 4.0), 5), Mats.glow(accent.darkened(0.35), 0.5), Vector3(0, 1.2, 0), Vector3(rng.randf_range(-12, 12), 0, rng.randf_range(-12, 12)))
+			"ruin":
+				Models.part(root, Models.cyl(0.08, 0.15, 2.4, 5), Mats.solid(Color("3b3222")), Vector3(0, 1.2, 0), Vector3(0, 0, rng.randf_range(-15, 15)))
+				Models.part(root, Models.sphere(0.9, 7, 4), Mats.solid(accent.darkened(0.55), 0.9), Vector3(0, 2.6, 0), Vector3.ZERO, Vector3(1, 0.6, 1))
+			"obsidian":
+				Models.part(root, Models.cyl(0.0, 0.6, rng.randf_range(2.5, 5.0), 4), Mats.solid(col, 0.15, 0.4), Vector3(0, 1.5, 0))
+			_:
+				Models.part(root, Models.cyl(0.1, 0.2, 2.6, 6), Mats.solid(Color("1c1714")), Vector3(0, 1.3, 0))
+				Models.part(root, Models.cyl(0.0, 0.7, 1.4, 6), Mats.solid(Color("241e1a")), Vector3(0, 2.4, 0))
 
 
 func _add_box(body: StaticBody3D, r: Rect2, h: float) -> void:

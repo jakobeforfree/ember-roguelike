@@ -15,6 +15,7 @@ var equipped := {}               # slot -> uid
 var best_stage := 0
 var best_room := 0
 var total_runs := 0
+var lore: Array = []             # unlocked journal page ids, e.g. "frostfell:1"
 
 
 func _ready() -> void:
@@ -28,6 +29,7 @@ func reset() -> void:
 	best_stage = 0
 	best_room = 0
 	total_runs = 0
+	lore.clear()
 	ensure_starter_gear()
 
 
@@ -88,6 +90,20 @@ func equipped_items() -> Array:
 	return out
 
 
+## Unlocks a journal page. Returns true if it was new (and saves right away).
+func unlock_lore(id: String) -> bool:
+	if id in lore:
+		return false
+	lore.append(id)
+	save_profile()
+	changed.emit()
+	return true
+
+
+func has_lore(id: String) -> bool:
+	return id in lore
+
+
 func salvage_value(item: GearItem) -> int:
 	return int(5 * pow(2.2, item.rarity) * (1.0 + 0.1 * item.level))
 
@@ -124,7 +140,7 @@ func to_dict() -> Dictionary:
 		items.append(it.to_dict())
 	return {"version": SAVE_VERSION, "character_id": character_id, "gold": gold,
 		"inventory": items, "equipped": equipped, "best_stage": best_stage,
-		"best_room": best_room, "total_runs": total_runs}
+		"best_room": best_room, "total_runs": total_runs, "lore": lore}
 
 
 func load_dict(d: Dictionary) -> void:
@@ -137,6 +153,7 @@ func load_dict(d: Dictionary) -> void:
 	best_stage = int(d.get("best_stage", 0))
 	best_room = int(d.get("best_room", 0))
 	total_runs = int(d.get("total_runs", 0))
+	lore = d.get("lore", [])
 	ensure_starter_gear()
 	changed.emit()
 

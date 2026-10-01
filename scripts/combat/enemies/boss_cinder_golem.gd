@@ -1,5 +1,6 @@
 extends Enemy
-## Boss - Cinder Golem. Cycles between three telegraphed attacks:
+## World guardian boss (the Cinder Golem's body, recolored and renamed per world).
+## Cycles between three telegraphed attacks:
 ##  * Meteor Slam: AoE circles drop on your position one after another
 ##  * Ember Nova: rings of slow orbs with a gap you can slip through
 ##  * Molten Rush: long charge across the arena
@@ -17,6 +18,7 @@ var _dashed := 0.0
 var _hit_player := false
 var _pending := 0
 var _core: MeshInstance3D
+var world_index := 0        # set by Room: 1 frost = double novas, 2 mire = extra meteor, 3 spire = faster + early summons
 
 
 func _build_model() -> Node3D:
@@ -35,8 +37,13 @@ func enraged() -> bool:
 	return hp < max_hp * 0.5
 
 
+func _summons_active() -> bool:
+	return hp < max_hp * (0.7 if world_index == 3 else 0.5)
+
+
 func _windup_mult() -> float:
-	return 0.75 if enraged() else 1.0
+	var m := 0.75 if enraged() else 1.0
+	return m * (0.85 if world_index == 3 else 1.0)
 
 
 func _think(delta: float) -> void:
@@ -79,7 +86,7 @@ func _animate(delta: float) -> void:
 
 func _start_attack() -> void:
 	_attack_count += 1
-	if enraged() and _attack_count % 3 == 0:
+	if _summons_active() and _attack_count % 3 == 0:
 		summon_requested.emit(["grunt", "grunt"] if difficulty < 4.0 else ["grunt", "charger"], global_position)
 	var options := ATTACKS.filter(func(a): return a != _last_attack)
 	var pick: String = options[randi() % options.size()]
@@ -92,7 +99,7 @@ func _start_attack() -> void:
 
 
 func _slam() -> void:
-	var count := 4 if enraged() else 3
+	var count := (4 if enraged() else 3) + (1 if world_index == 2 else 0)
 	_pending = count
 	for i in count:
 		after(i * 0.45 * _windup_mult(), _drop_meteor)
@@ -118,7 +125,7 @@ func _on_meteor(tg: Telegraph) -> void:
 func _nova() -> void:
 	var tg := add_telegraph(Telegraph.circle(global_position, radius + 1.0, 0.8 * _windup_mult()))
 	tg.color = Color(1.0, 0.55, 0.1)
-	var rings := 2 if enraged() else 1
+	var rings := 2 if enraged() or world_index == 1 else 1
 	_pending = rings
 	tg.finished.connect(func(_t):
 		for r in rings:

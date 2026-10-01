@@ -23,11 +23,13 @@ touch controls appear automatically if you touch the screen.
 |---|---|---|---|
 | Move | WASD / arrows | Left stick / D-pad | Left-half floating stick |
 | Dodge | Space / Shift (standing still: toward the mouse cursor) | A / RB | DODGE button |
+| Ember Burst | Q / E | X / LB | BURST button |
 | Attack | Automatic, nearest visible enemy | | |
 | Pick upgrade | 1 / 2 / 3, or arrows + Enter, or click | D-pad + A | Tap |
 | Pause | Esc / P | Start | `II` button |
 | Start run | Click the campfire, or Enter | A | Tap the fire |
 | Backpack (gear) | Click the backpack, or B / I / Tab | Y | Tap the pack |
+| Journal (lore) | Click the journal, or J | | Tap the journal |
 
 Settings (fullscreen, screen shake, damage numbers) are in the gear menu at camp and in the pause menu,
 and are saved to `user://settings.cfg`.
@@ -80,6 +82,38 @@ the main menu: click the **campfire** to set out, or click the **backpack** to m
 Each weapon reads the shared upgrade stats its own way (for example, multishot widens the sword's arc,
 adds a knife to the dagger fan, or adds an extra wand target). Weapons drop as gear and show in the wizard's hand.
 
+## Worlds and story
+The Hollow King swallowed the sun. The Wanderer escaped with its last ember and must carry it to the
+top of the Hollow Spire to set the morning free. Each stage is one world, with its own palette, scenery,
+weather, enemy colors and guardian boss:
+
+| # | World | Guardian | Twist |
+|---|---|---|---|
+| 1 | The Ashen Woods | Cinder Golem | (the original fight) |
+| 2 | Frostfell Hollow | Rime Colossus | Always fires double frost rings |
+| 3 | The Drowned Mire | Bog Warden | Drops an extra meteor per slam |
+| 4 | The Hollow Spire | The Hollow King | Faster attacks, summons from 70% HP |
+
+After world 4 the cycle repeats as **Ascension 1, 2, ...** (harder each time). Each world has 3 journal
+pages: one on arrival, one hidden (a glowing scroll that can appear after clearing a room), one for
+defeating the guardian. Read them in the **Journal** at camp. All world data and lore text live in
+`scripts/data/world_db.gd`, so adding a world or a page means editing data, not code.
+
+## Ember Burst (Q)
+The Wanderer's signature spell: the ember flares out around him, dealing 2.5x weapon damage, knocking
+enemies back, igniting them and burning away nearby enemy projectiles. 8 s cooldown. The upgrades
+*Stoked Flame* (faster recharge) and *Wildfire* (harder, wider burst) improve it.
+
+## Saves and accounts
+There are no accounts yet. Progress (gear, gold, records, journal pages, settings) is saved locally in
+the player's browser (IndexedDB) for this site. So:
+- Each person who opens the link gets their **own fresh save**; nobody shares yours.
+- Your save stays when you come back in the same browser, but does not follow you to another device or
+  browser, and is erased if you clear the site's data.
+
+For real accounts and cross-device progress, the plan is Supabase: sign-in plus a `profiles` table that
+stores the JSON from `Profile.to_dict()`, loaded with `Profile.load_dict()`.
+
 ## Code layout
 ```
 scripts/
@@ -91,8 +125,9 @@ scripts/
               upgrade_db, character_db, enemy_db   ← data tables
   combat/     player, enemy (base), enemies/*, projectile, telegraph, combat (damage + procs), fx
   weapons/    weapon_behavior.gd (base), bow_behavior.gd
-  world/      room.gd (layout, walls, A* nav, waves, gate), run_controller.gd, camp_scene.gd (3D camp menu), loot_pickup.gd
-  ui/         camp_menu (main screen), inventory_screen (backpack), hud, ability_slot, virtual_joystick,
+  world/      room.gd (layout, walls, A* nav, waves, gate, per-world theming), run_controller.gd,
+              camp_scene.gd (3D camp menu), loot_pickup.gd, lore_pickup.gd
+  ui/         camp_menu (main screen), inventory_screen (backpack), journal_screen, hud, ability_slot, virtual_joystick,
               dodge_button, upgrade_panel, message_panel, settings_panel, ui_kit, badge, bar
 shaders/      telegraph + floor
 tools/        build_web.sh, fetch_web_templates.py (web build / Vercel)

@@ -22,6 +22,7 @@ var bar_height := 1.7
 var color := Color.RED
 var dead := false
 var is_boss := false
+var display_name := ""
 
 var state := "chase"
 var state_time := 0.0
@@ -41,6 +42,7 @@ var _flash := 0.0
 var _waypoint := Vector2.ZERO
 var _repath := 0.0
 var _t := 0.0
+var _knock := Vector3.ZERO
 
 
 func setup(id: String, diff: float, p_room: Room, p_player: Player) -> void:
@@ -132,6 +134,9 @@ func _physics_process(delta: float) -> void:
 	state_time += delta
 	velocity = Vector3.ZERO
 	_think(delta)
+	if _knock.length() > 0.05:
+		velocity += _knock
+		_knock = _knock.lerp(Vector3.ZERO, 1.0 - exp(-8.0 * delta))
 	move_and_slide()
 	position.y = 0.0
 	_animate(delta)
@@ -207,6 +212,12 @@ func _tick_status(delta: float) -> void:
 			dot += burn_dps * 0.5
 		if dot > 0.0:
 			take_damage(dot, false, Color("a3e635") if poison_left > 0.0 else Color("fb923c"))
+
+
+## Shoves the enemy (bosses barely budge).
+func knockback(impulse: Vector3) -> void:
+	impulse.y = 0.0
+	_knock += impulse * (0.15 if is_boss else 1.0)
 
 
 func add_poison(dps: float, duration: float) -> void:

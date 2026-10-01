@@ -59,8 +59,9 @@ func _ready() -> void:
 
 	_prompts["fire"] = _make_prompt("BEGIN JOURNEY", "ENTER", "local_fire_department", UiKit.ACCENT)
 	_prompts["pack"] = _make_prompt("BACKPACK", "B", "backpack", Color("e7c9a0"))
+	_prompts["journal"] = _make_prompt("JOURNAL", "J", "menu_book", Color("ffcf7a"))
 
-	var foot := UiKit.hint_row([["ENTER", "Set out"], ["B", "Backpack"], ["ESC", "Settings"]])
+	var foot := UiKit.hint_row([["ENTER", "Set out"], ["B", "Backpack"], ["J", "Journal"], ["ESC", "Settings"]])
 	foot.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	foot.offset_left = -220
 	foot.offset_right = 220
@@ -151,7 +152,7 @@ func _set_hover(id: String) -> void:
 
 
 func _modal_open() -> bool:
-	return get_children().any(func(c): return c is SettingsPanel or c is InventoryScreen)
+	return get_children().any(func(c): return c is SettingsPanel or c is InventoryScreen or c is JournalScreen)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -168,6 +169,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("confirm"):
 		get_viewport().set_input_as_handled()
 		activate("fire")
+	elif event.is_action_pressed("journal"):
+		get_viewport().set_input_as_handled()
+		activate("journal")
 	elif event.is_action_pressed("backpack"):
 		get_viewport().set_input_as_handled()
 		activate("pack")
@@ -188,6 +192,8 @@ func activate(id: String) -> void:
 				start_run.emit())
 		"pack":
 			open_inventory()
+		"journal":
+			open_journal()
 
 
 func open_inventory() -> InventoryScreen:
@@ -197,6 +203,15 @@ func open_inventory() -> InventoryScreen:
 	_set_chrome(false)
 	add_child(inv)
 	return inv
+
+
+func open_journal() -> JournalScreen:
+	_set_hover("")
+	var j := JournalScreen.new()
+	j.closed.connect(_set_chrome.bind(true))
+	_set_chrome(false)
+	add_child(j)
+	return j
 
 
 func open_settings() -> void:

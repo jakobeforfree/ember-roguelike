@@ -215,8 +215,83 @@ func test_every_layout_is_navigable() -> void:
 			room.free()
 
 
+func test_worlds_cycle_and_theme_rooms() -> void:
+	check(WorldDB.index_for_stage(1) == 0 and WorldDB.index_for_stage(4) == 3 and WorldDB.index_for_stage(5) == 0, "worlds cycle every 4 stages")
+	check(WorldDB.ascension_for_stage(5) == 1, "stage 5 is Ascension 1")
+	for i in WorldDB.count():
+		var w: Dictionary = WorldDB.WORLDS[i]
+		check(WorldDB.LORE.has(w["id"]) and WorldDB.LORE[w["id"]].size() == 3, "%s has 3 journal pages" % w["id"])
+		var room := Room.new()
+		var rng := RandomNumberGenerator.new()
+		rng.seed = i
+		room.build(rng, 2.0, true, 4, w)
+		add_child(room)
+		var e := room.spawn_enemy("boss", Vector3(10, 0, 8))
+		check(e.display_name == w["boss"]["name"] and e.color == w["boss"]["color"], "%s boss is themed" % w["id"])
+		check(e.get("world_index") == i, "%s boss knows its world" % w["id"])
+		var g := room.spawn_enemy("grunt", Vector3(14, 0, 8))
+		if w["tint"].has("grunt"):
+			check(g.color == w["tint"]["grunt"], "%s tints grunts" % w["id"])
+		room.queue_free()
+		await _frames(2)
+
+
+func test_ember_burst() -> void:
+	var arena := _make_arena()
+	var room: Room = arena[0]
+	var p: Player = arena[1]
+	p.stats.set_base("attack_range", 0.0)
+	var e := room.spawn_enemy("grunt", Vector3(12, 0, 10))
+	e.speed = 0.0
+	e.max_hp = 100000.0   # survive the burst so knockback can be measured
+	e.hp = e.max_hp
+	await _frames(60)
+	var shot := Projectile.new()
+	shot.team = Projectile.Team.ENEMY
+	shot.position = Vector3(9, 0, 10)
+	shot.velocity = Vector3(0.01, 0, 0)
+	shot.room = room
+	room.entities.add_child(shot)
+	var hp0 := e.hp
+	var x0 := e.global_position.x
+	check(p.try_ability(), "Ember Burst fires")
+	check(not p.try_ability(), "Ember Burst has a cooldown")
+	check(e.hp < hp0, "burst damages nearby enemies")
+	await _frames(20)
+	check(not is_instance_valid(shot), "burst destroys enemy projectiles")
+	check(e.global_position.x > x0 + 0.5, "burst knocks enemies back (%.2f -> %.2f)" % [x0, e.global_position.x])
+	var cd := p.stats.get_stat("ability_cooldown")
+	p.stats.add_mods(UpgradeDB.mods_of("stoke"))
+	check(p.stats.get_stat("ability_cooldown") < cd, "Stoked Flame shortens the cooldown")
+	Engine.time_scale = 1.0
+	room.queue_free()
+
+
+func test_lore_unlocks_persist() -> void:
+	Profile.reset()
+	check(Profile.unlock_lore("frostfell:1"), "new page unlocks")
+	check(not Profile.unlock_lore("frostfell:1"), "same page only once")
+	Profile.load_profile()
+	check(Profile.has_lore("frostfell:1"), "pages survive reload")
+
+
+func test_journal_opens_from_camp() -> void:
+	var main = load("res://scripts/main.gd").new()
+	add_child(main)
+	await _frames(5)
+	var j: JournalScreen = main.menu.open_journal()
+	await _frames(5)
+	check(main.menu._modal_open(), "journal opens")
+	check(main.camp.screen_circle("journal")[1] > 5.0, "journal prop is on screen")
+	j.close()
+	await _frames(3)
+	check(not main.menu._modal_open(), "journal closes")
+	main.queue_free()
+	await _frames(2)
+
+
 func test_pc_controls() -> void:
-	for a in ["move_left", "move_right", "move_up", "move_down", "dodge", "pause", "confirm", "pick_1", "pick_3"]:
+	for a in ["move_left", "move_right", "move_up", "move_down", "dodge", "ability", "backpack", "journal", "pause", "confirm", "pick_1", "pick_3"]:
 		check(InputMap.has_action(a), "action %s registered" % a)
 	check(Controls.key_label("dodge") == "SPACE", "dodge shows SPACE keycap (got %s)" % Controls.key_label("dodge"))
 	Input.action_press("move_right")
@@ -393,10 +468,11 @@ func _sim_run(seed_value: int, god: bool, max_seconds: float) -> Dictionary:
 			if is_instance_valid(e):
 				info.append("%s@%s st=%s los=%s hp=%d" % [e.enemy_id, Vector2i(Flat.xz(e.global_position)), e.state, e.has_los(), e.hp])
 		for n in run.room.entities.get_children():
-			if n is LootPickup:
+			if n is LootPickup or n is LorePickup:
 				var here := Flat.xz(run.player.global_position)
 				var to := Flat.xz(n.global_position)
 				print("    loot at %s blocked=%s waypoint=%s bounds=%s obstacles=%s" % [to, run.room.is_blocked(to, 0.45), run.room.next_waypoint(here, to, 0.45), run.room.bounds, run.room.obstacles])
+		print("    player move_input=%s velocity=%s dead=%s players_in_tree=%d" % [run.player.move_input, run.player.velocity, run.player.dead, get_tree().get_nodes_in_group("player").size()])
 		print("    STALL: layout=%s wave=%d player=%s weapon=%s door=%s alive=%s" % [run.room.layout_name, run.room.wave_index, Vector2i(Flat.xz(run.player.global_position)), run.player.weapon_id, run.room.door_open, info])
 	get_tree().paused = false
 	Engine.time_scale = 1.0
@@ -408,7 +484,9 @@ func _sim_run(seed_value: int, god: bool, max_seconds: float) -> Dictionary:
 func test_full_run_flow_reaches_stage_2() -> void:
 	var r = await _sim_run(11, true, 600.0)
 	print("    god-bot run: ", r)
-	check(r["stage"] >= 2, "bot clears 4 rooms + boss and enters stage 2")
+	check(r["stage"] >= 2, "bot clears 4 rooms + boss and enters stage 2 (world 2)")
+	check(Profile.has_lore("ashen_woods:0") and Profile.has_lore("ashen_woods:2"), "arrival and guardian pages unlocked")
+	check(Profile.has_lore("frostfell:0"), "entering world 2 unlocks its first page")
 	check(r["loot"] >= 2, "boss dropped and bot collected loot")
 	check(r["kills"] > 10, "enemies were killed")
 

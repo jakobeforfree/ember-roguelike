@@ -93,4 +93,54 @@ func _ready() -> void:
 	run._on_modal_action("settings")
 	await get_tree().create_timer(0.5, true, false, true).timeout
 	await shot("06_settings")
+	get_tree().paused = false
+	main.queue_free()
+	await get_tree().create_timer(0.3).timeout
+	# One staged scene per world
+	for i in WorldDB.count():
+		var w: Dictionary = WorldDB.WORLDS[i]
+		var stage := Node3D.new()
+		add_child(stage)
+		WorldKit.setup(stage, w["ambient"], w["bg"], w["sun"])
+		var room := Room.new()
+		var rng2 := RandomNumberGenerator.new()
+		rng2.seed = 3 + i
+		room.build(rng2, 1.0, false, 1 + i, w)
+		stage.add_child(room)
+		var hero := Player.new()
+		hero.setup(StatBuilder.build("wanderer", [], {}), "staff")
+		hero.room = room
+		hero.position = Vector3(room.bounds.size.x * 0.5, 0, room.bounds.size.y * 0.62)
+		hero.stats.set_base("attack_range", 0.0)
+		room.player = hero
+		room.entities.add_child(hero)
+		var ids := ["grunt", "spitter", "charger", "grunt"]
+		for k in ids.size():
+			var en := room.spawn_enemy(ids[k], hero.position + Vector3(-6 + k * 4, 0, -5 - (k % 2) * 2))
+			en.speed = 0.0
+		var cam := Camera3D.new()
+		cam.fov = 44.0
+		stage.add_child(cam)
+		cam.position = hero.position + Vector3(0, 21, 9) + Vector3(0, 0, -3)
+		cam.look_at(cam.position - Vector3(0, 21, 9))
+		cam.current = true
+		await get_tree().create_timer(1.6).timeout
+		await shot("07_world_%d_%s" % [i + 1, w["id"]])
+		stage.queue_free()
+		await get_tree().create_timer(0.2).timeout
+	# Journal with a few pages
+	for id in ["ashen_woods:0", "ashen_woods:1", "ashen_woods:2", "frostfell:0"]:
+		Profile.unlock_lore(id)
+	var main2 = load("res://scripts/main.gd").new()
+	add_child(main2)
+	await get_tree().create_timer(0.8).timeout
+	main2.menu._set_hover("journal")
+	await get_tree().create_timer(0.4).timeout
+	await shot("08_camp_journal_hover")
+	main2.menu._set_hover("")
+	var j: JournalScreen = main2.menu.open_journal()
+	j._selected = 0
+	j._refresh()
+	await get_tree().create_timer(0.6).timeout
+	await shot("09_journal")
 	get_tree().quit()

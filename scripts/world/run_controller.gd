@@ -21,13 +21,14 @@ var input_enabled := true   # false = something else (tests, replays, autoplay) 
 var _ending := false
 var _trauma := 0.0
 var _ui_root: Control
+var _env: Node3D
+var _env_world := ""
 
 
 func start(seed_value: int = -1) -> void:
 	run = RunState.new(seed_value)
 	run.character_id = Profile.character_id
 	Engine.time_scale = 1.0
-	WorldKit.setup(self)
 
 	camera = Camera3D.new()
 	camera.fov = CAM_FOV
@@ -46,6 +47,7 @@ func start(seed_value: int = -1) -> void:
 	hud.camera = camera
 	root.add_child(hud)
 	hud.dodge.pressed.connect(_on_dodge_pressed)
+	hud.burst.pressed.connect(_on_ability_pressed)
 	hud.pause_pressed.connect(_open_pause)
 	upgrade_panel = UpgradePanel.new()
 	upgrade_panel.visible = false
@@ -79,7 +81,9 @@ func _load_room() -> void:
 	room = Room.new()
 	room.name = "Room"
 	room.player = player
-	room.build(run.rng, run.difficulty(), run.is_boss_room(), run.room_index)
+	var world := run.world()
+	_apply_world_env(world)
+	room.build(run.rng, run.difficulty(), run.is_boss_room(), run.room_index, world)
 	add_child(room)
 	player.room = room
 	player.position = room.player_spawn()
@@ -90,10 +94,34 @@ func _load_room() -> void:
 	room.exit_reached.connect(_on_exit_reached)
 	_update_camera(1.0)
 	_update_room_label()
+	hud.set_world(world, run.ascension())
 	if run.is_boss_room():
-		hud.show_message("CINDER GOLEM", 2.0, "Stage %d guardian" % run.stage, Color("fdba74"))
+		hud.show_message(world["boss"]["name"], 2.0, "Guardian of %s" % world["name"], Color(world["boss"]["color"]).lightened(0.3))
+	elif run.room_index == 0:
+		var asc := run.ascension()
+		hud.show_message(String(world["name"]).to_upper(), 2.6, ("Ascension %d · " % asc if asc > 0 else "") + world["tagline"], Color(world["color"]).lightened(0.25))
+		_unlock_page(world["id"], 0)
 	else:
-		hud.show_message("ROOM %d" % (run.room_index + 1), 1.0, "Stage %d" % run.stage)
+		hud.show_message("ROOM %d" % (run.room_index + 1), 1.0, world["name"])
+
+
+## Lighting, fog and sun color follow the world; rebuilt only when the world changes.
+func _apply_world_env(world: Dictionary) -> void:
+	if _env and _env_world == world["id"]:
+		return
+	if _env:
+		_env.queue_free()
+	_env = Node3D.new()
+	_env.name = "Environment"
+	add_child(_env)
+	WorldKit.setup(_env, world["ambient"], world["bg"], world["sun"])
+	_env_world = world["id"]
+
+
+func _unlock_page(world_id: String, page: int) -> void:
+	var id := WorldDB.page_id(world_id, page)
+	if Profile.unlock_lore(id):
+		hud.notify("menu_book", "JOURNAL PAGE FOUND", WorldDB.page(world_id, page)[0], Color("ffcf7a"))
 
 
 func _start_room_combat() -> void:
@@ -121,6 +149,7 @@ func _physics_process(delta: float) -> void:
 		player.move_input = _read_move_input()
 		player.aim_dir = Vector3.ZERO if Controls.touch_mode else _mouse_aim()
 	hud.set_dodge_cooldown(player.dodge_cooldown_ratio(), player.dodge_cd_left)
+	hud.set_ability_cooldown(player.ability_cooldown_ratio(), player.ability_cd_left)
 	_trauma = maxf(0.0, _trauma - delta * 1.8)
 	if room and room.boss and is_instance_valid(room.boss):
 		hud.set_boss(room.boss)
@@ -154,6 +183,8 @@ func shake(amount: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("dodge"):
 		_on_dodge_pressed()
+	elif event.is_action_pressed("ability"):
+		_on_ability_pressed()
 	elif event.is_action_pressed("pause"):
 		_open_pause()
 
@@ -179,6 +210,11 @@ func _update_camera(weight: float) -> void:
 		camera.v_offset = 0.0
 
 
+func _on_ability_pressed() -> void:
+	if player and not get_tree().paused:
+		player.try_ability()
+
+
 func _on_dodge_pressed() -> void:
 	if player and not get_tree().paused:
 		player.try_dodge()
@@ -193,9 +229,13 @@ func _on_room_cleared() -> void:
 	if heal > 0.0:
 		player.heal(player.max_hp * heal)
 	_drop_loot()
+	var world := run.world()
 	if run.is_boss_room():
 		hud.set_boss(null)
-		hud.show_message("STAGE %d CLEARED" % run.stage, 2.5, "The golem crumbles", UiKit.GOLD)
+		hud.show_message("%s FREED" % String(world["boss"]["name"]), 2.5, "The guardian of %s is at rest" % world["name"], UiKit.GOLD)
+		_unlock_page(world["id"], 2)
+	elif not Profile.has_lore(WorldDB.page_id(world["id"], 1)) and run.rng.randf() < 0.35:
+		_drop_page(WorldDB.page_id(world["id"], 1))
 	else:
 		hud.show_message("CLEARED", 1.2, "", UiKit.TEAL)
 	get_tree().create_timer(1.0, false).timeout.connect(func():
@@ -222,6 +262,20 @@ func _drop_loot() -> void:
 		pickup.position = Flat.v3(p)
 		pickup.collected.connect(_on_loot_collected)
 		room.entities.add_child(pickup)
+
+
+func _drop_page(id: String) -> void:
+	var p := LorePickup.new()
+	p.page_id = id
+	p.player = player
+	var pos := room.bounds.get_center() + Vector2(0, 2.5)
+	while room.is_blocked(pos, 0.8):
+		pos.y += 1.0
+	p.position = Flat.v3(pos)
+	p.collected.connect(func(pid):
+		var parts: PackedStringArray = pid.split(":")
+		_unlock_page(parts[0], int(parts[1])))
+	room.entities.add_child(p)
 
 
 func _on_loot_collected(item: GearItem) -> void:

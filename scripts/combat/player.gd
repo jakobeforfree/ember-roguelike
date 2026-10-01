@@ -7,6 +7,7 @@ extends CharacterBody3D
 signal hp_changed(hp: float, max_hp: float)
 signal died
 signal dodged(perfect: bool)
+signal ability_used
 
 const DASH_TIME := 0.16
 const HURT_GRACE := 0.45
@@ -30,6 +31,7 @@ var dash_hit := {}
 var perfect_this_dash := false
 var forced_crits := 0
 var attack_cd := 0.0
+var ability_cd_left := 0.0
 var dead := false
 var model: Node3D
 var weapon_id := "staff"
@@ -121,11 +123,53 @@ func try_dodge() -> bool:
 	return true
 
 
+const BURST_RADIUS := 3.6
+const BURST_DAMAGE := 2.5      # x weapon damage
+
+
+func ability_cooldown_ratio() -> float:
+	return clampf(ability_cd_left / stats.get_stat("ability_cooldown"), 0.0, 1.0) if stats else 0.0
+
+
+## Ember Burst (Q): the ember flares out around the Wanderer, scorching and shoving
+## nearby enemies and burning away incoming projectiles.
+func try_ability() -> bool:
+	if dead or ability_cd_left > 0.0:
+		return false
+	ability_cd_left = stats.get_stat("ability_cooldown")
+	var power := stats.get_stat("ability_power")
+	var r := BURST_RADIUS * sqrt(power)
+	var here := global_position
+	Fx.ring(get_parent(), here, Color("ffb347"), r, 0.35)
+	Fx.ring(get_parent(), here, Color("ff5a1f"), r * 0.6, 0.25)
+	Fx.burst(get_parent(), here, Color("ff9a3d"), 1.3, 30)
+	Events.screen_shake.emit(0.35)
+	for n in get_parent().get_children():
+		if n is Projectile and n.team == Projectile.Team.ENEMY and Flat.dist(n.global_position, here) <= r + 0.5:
+			n.queue_free()
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if not e.is_targetable():
+			continue
+		var to: Vector3 = e.global_position - here
+		to.y = 0.0
+		if to.length() > r + e.radius:
+			continue
+		var roll := Combat.roll_damage(self, BURST_DAMAGE * power)
+		Combat.player_hits_enemy(self, e, roll[0], roll[1], true)
+		if is_instance_valid(e) and not e.dead:
+			e.knockback(to.normalized() * 14.0)
+			e.ignite(stats.get_stat("damage") * 0.3, 2.0)
+	_kick = 1.0
+	ability_used.emit()
+	return true
+
+
 func _physics_process(delta: float) -> void:
 	if dead or stats == null:
 		return
 	_t += delta
 	dodge_cd_left = maxf(0.0, dodge_cd_left - delta)
+	ability_cd_left = maxf(0.0, ability_cd_left - delta)
 	invuln_left = maxf(0.0, invuln_left - delta)
 	iframe_left = maxf(0.0, iframe_left - delta)
 	_flash = maxf(0.0, _flash - delta)
